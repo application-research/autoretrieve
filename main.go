@@ -40,6 +40,15 @@ const minerWhitelistFilename = "whitelist.txt"
 const datastoreSubdir = "datastore"
 const walletSubdir = "wallet"
 
+var flagWhitelist = &cli.StringSliceFlag{
+	Name:  "whitelist",
+	Usage: "Which miners to whitelist - overrides whitelist.txt",
+}
+var flagBlacklist = &cli.StringSliceFlag{
+	Name:  "blacklist",
+	Usage: "Which miners to blacklist - overrides blacklist.txt",
+}
+
 func main() {
 	log.SetLogLevel("autoretrieve", "DEBUG")
 
@@ -70,6 +79,8 @@ func main() {
 			Value: 4,
 			Usage: "Max bitswap message sender worker thread count",
 		},
+		flagWhitelist,
+		flagBlacklist,
 	}
 
 	app.Action = run
@@ -78,10 +89,12 @@ func main() {
 		{
 			Name:   "check-blacklist",
 			Action: cmdCheckBlacklist,
+			Flags:  []cli.Flag{flagBlacklist},
 		},
 		{
 			Name:   "check-whitelist",
 			Action: cmdCheckWhitelist,
+			Flags:  []cli.Flag{flagWhitelist},
 		},
 	}
 
@@ -149,12 +162,12 @@ func run(cctx *cli.Context) error {
 	}()
 
 	// Load miner blacklist and whitelist
-	minerBlacklist, err := readMinerList(path.Join(dataDir, minerBlacklistFilename))
+	minerBlacklist, err := readMinerListFile(path.Join(dataDir, minerBlacklistFilename))
 	if err != nil {
 		return err
 	}
 
-	minerWhitelist, err := readMinerList(path.Join(dataDir, minerWhitelistFilename))
+	minerWhitelist, err := readMinerListFile(path.Join(dataDir, minerWhitelistFilename))
 	if err != nil {
 		return err
 	}
@@ -240,7 +253,7 @@ func run(cctx *cli.Context) error {
 }
 
 func cmdCheckBlacklist(cctx *cli.Context) error {
-	minerBlacklist, err := readMinerList(filepath.Join(cctx.String("datadir"), minerBlacklistFilename))
+	minerBlacklist, err := getBlacklist(cctx)
 	if err != nil {
 		return err
 	}
@@ -258,7 +271,7 @@ func cmdCheckBlacklist(cctx *cli.Context) error {
 }
 
 func cmdCheckWhitelist(cctx *cli.Context) error {
-	minerWhitelist, err := readMinerList(filepath.Join(cctx.String("datadir"), minerWhitelistFilename))
+	minerWhitelist, err := getWhitelist(cctx)
 	if err != nil {
 		return err
 	}
@@ -321,7 +334,7 @@ func initHost(ctx context.Context, dataDir string, listenAddrs ...multiaddr.Mult
 	return host, nil
 }
 
-func readMinerList(path string) (map[address.Address]bool, error) {
+func readMinerListFile(path string) (map[address.Address]bool, error) {
 	bytes, err := os.ReadFile(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
@@ -335,7 +348,7 @@ func readMinerList(path string) (map[address.Address]bool, error) {
 
 	var blacklistArr []address.Address
 	for lineNum, str := range strs {
-		str = strings.TrimSpace(str)
+		str = strings.TrimSpace(strings.Split(str, "#")[0])
 
 		if str == "" {
 			continue
@@ -356,4 +369,50 @@ func readMinerList(path string) (map[address.Address]bool, error) {
 	}
 
 	return blacklist, nil
+}
+
+func parseMinerListArg(cctx *cli.Context, flagName string) (map[address.Address]bool, error) {
+	// Each minerStringsRaw element may contain multiple comma-separated values
+	minerStringsRaw := cctx.StringSlice(flagName)
+
+	// Split any comma-separated minerStringsRaw elements
+	var minerStrings []string
+	for _, raw := range minerStringsRaw {
+		minerStrings = append(minerStrings, strings.Split(raw, ",")...)
+	}
+
+	miners := make(map[address.Address]bool)
+	for _, ms := range minerStrings {
+
+		miner, err := address.NewFromString(ms)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse miner %s: %w", ms, err)
+		}
+
+		miners[miner] = true
+	}
+
+	return miners, nil
+}
+
+// Attempts to load the passed cli flag first - if empty, loads the file instead
+func getList(cctx *cli.Context, flagName string, path string) (map[address.Address]bool, error) {
+	argList, err := parseMinerListArg(cctx, flagName)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(argList) != 0 {
+		return argList, nil
+	}
+
+	return readMinerListFile(path)
+}
+
+func getWhitelist(cctx *cli.Context) (map[address.Address]bool, error) {
+	return getList(cctx, "whitelist", filepath.Join(cctx.String("datadir"), minerWhitelistFilename))
+}
+
+func getBlacklist(cctx *cli.Context) (map[address.Address]bool, error) {
+	return getList(cctx, "blacklist", filepath.Join(cctx.String("datadir"), minerBlacklistFilename))
 }
