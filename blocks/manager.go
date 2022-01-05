@@ -96,17 +96,10 @@ func (mgr *Manager) notifyWaitChans(block Block) {
 
 	mgr.waitListLk.Lock()
 	if blockChans, ok := mgr.waitList[cid]; ok {
-		mgr.waitListLk.Unlock()
-
-		// I'm unlocking the inside of this loop to avoid potential deadlock if
-		// ch is full - is this possible?
-
 		delete(mgr.waitList, cid)
 		for _, callback := range blockChans {
 			callback(block)
 		}
-
-		mgr.waitListLk.Lock()
 	}
 	mgr.waitListLk.Unlock()
 }
