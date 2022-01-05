@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -162,12 +161,12 @@ func run(cctx *cli.Context) error {
 	}()
 
 	// Load miner blacklist and whitelist
-	minerBlacklist, err := readMinerListFile(path.Join(dataDir, minerBlacklistFilename))
+	minerBlacklist, err := getBlacklist(cctx)
 	if err != nil {
 		return err
 	}
 
-	minerWhitelist, err := readMinerListFile(path.Join(dataDir, minerWhitelistFilename))
+	minerWhitelist, err := getWhitelist(cctx)
 	if err != nil {
 		return err
 	}
