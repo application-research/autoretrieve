@@ -20,9 +20,11 @@ import (
 	"github.com/application-research/filclient"
 	"github.com/application-research/filclient/keystore"
 	"github.com/filecoin-project/go-address"
+	"github.com/filecoin-project/go-data-transfer/channelmonitor"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	lcli "github.com/filecoin-project/lotus/cli"
 	leveldb "github.com/ipfs/go-ds-leveldb"
+	graphsync "github.com/ipfs/go-graphsync/impl"
 	"github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -220,7 +222,41 @@ func run(cctx *cli.Context) error {
 		Addr: walletAddr,
 	})
 
-	filClient, err := filclient.NewClient(host, api, wallet, walletAddr, blockManager, datastore, dataDir)
+	const maxTraversalLinks = 32 * (1 << 20)
+	fc, err := filclient.NewClientWithConfig(&filclient.Config{
+		Host:       host,
+		Api:        api,
+		Wallet:     wallet,
+		Addr:       walletAddr,
+		Blockstore: blockManager,
+		Datastore:  datastore,
+		DataDir:    dataDir,
+
+		GraphsyncOpts: []graphsync.Option{
+			graphsync.MaxInProgressIncomingRequests(200),
+			graphsync.MaxInProgressOutgoingRequests(200),
+			graphsync.MaxMemoryResponder(8 << 30),
+			graphsync.MaxMemoryPerPeerResponder(32 << 20),
+			graphsync.MaxInProgressIncomingRequestsPerPeer(20),
+			graphsync.MessageSendRetries(2),
+			graphsync.SendMessageTimeout(2 * time.Minute),
+			graphsync.MaxLinksPerIncomingRequests(maxTraversalLinks),
+			graphsync.MaxLinksPerOutgoingRequests(maxTraversalLinks),
+		},
+		ChannelMonitorConfig: channelmonitor.Config{
+
+			AcceptTimeout:          time.Hour * 24,
+			RestartDebounce:        time.Second * 10,
+			RestartBackoff:         time.Second * 20,
+			MaxConsecutiveRestarts: 15,
+			//RestartAckTimeout:      time.Second * 30,
+			CompleteTimeout: time.Minute * 40,
+
+			// Called when a restart completes successfully
+			//OnRestartComplete func(id datatransfer.ChannelID)
+		},
+		LogRetrievalProgressEvents: true,
+	})
 	if err != nil {
 		logger.Errorf("FilClient initialization failed: %v", err)
 	}
@@ -231,7 +267,7 @@ func run(cctx *cli.Context) error {
 		RetrievalTimeout:       timeout,
 		PerMinerRetrievalLimit: perMinerRetrievalLimit,
 		Metrics:                metricsInst,
-	}, filClient, endpoint, host, api, datastore, blockManager)
+	}, fc, endpoint, host, api, datastore, blockManager)
 	if err != nil {
 		return err
 	}
