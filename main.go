@@ -56,8 +56,8 @@ func main() {
 	app.Flags = []cli.Flag{
 		&cli.StringFlag{
 			Name:    "datadir",
-			Value:   "./estuary-ar",
-			EnvVars: []string{"ESTUARY_AR_DATADIR"},
+			Value:   "./data",
+			EnvVars: []string{"AUTORETRIEVE_DATADIR"},
 		},
 		&cli.DurationFlag{
 			Name:  "timeout",
