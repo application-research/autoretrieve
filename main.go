@@ -29,6 +29,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
+	"github.com/libp2p/go-libp2p-core/network"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
@@ -323,6 +324,15 @@ func cmdCheckWhitelist(cctx *cli.Context) error {
 	return nil
 }
 
+var statFmtString = `global conn stats: 
+memory: %d,
+number of inbound conns: %d,
+number of outbound conns: %d,
+number of file descriptors: %d,
+number of inbound streams: %d,
+number of outbound streams: %d,
+`
+
 func initHost(ctx context.Context, dataDir string, listenAddrs ...multiaddr.Multiaddr) (host.Host, error) {
 	var peerkey crypto.PrivKey
 	keyPath := filepath.Join(dataDir, "peerkey")
@@ -366,6 +376,24 @@ func initHost(ctx context.Context, dataDir string, listenAddrs ...multiaddr.Mult
 		return nil, err
 	}
 
+	go func() {
+		for range time.Tick(time.Second * 10) {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			err := host.Network().ResourceManager().ViewSystem(func(scope network.ResourceScope) error {
+				stat := scope.Stat()
+				logger.Infof(statFmtString, stat.Memory, stat.NumConnsInbound, stat.NumConnsOutbound, stat.NumFD, stat.NumStreamsInbound, stat.NumStreamsOutbound)
+				return nil
+			})
+			if err != nil {
+				logger.Errorf("unable to fetch global resource manager scope: %s", err.Error())
+				return
+			}
+		}
+	}()
 	return host, nil
 }
 
