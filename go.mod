@@ -3,9 +3,10 @@ module github.com/application-research/autoretrieve
 go 1.17
 
 require (
-	github.com/application-research/filclient v0.0.0-20220126072655-8af37db4973c
+	github.com/application-research/filclient v0.0.0-20220131225437-3003c00f4f71
 	github.com/dustin/go-humanize v1.0.0
 	github.com/filecoin-project/go-address v0.0.6
+	github.com/filecoin-project/go-data-transfer v1.14.0
 	github.com/filecoin-project/go-fil-markets v1.19.0
 	github.com/filecoin-project/go-state-types v0.1.3
 	github.com/filecoin-project/lotus v1.13.3-0.20220121163823-6080431383fc
@@ -15,6 +16,7 @@ require (
 	github.com/ipfs/go-datastore v0.5.1
 	github.com/ipfs/go-ds-flatfs v0.5.1
 	github.com/ipfs/go-ds-leveldb v0.5.0
+	github.com/ipfs/go-graphsync v0.12.0
 	github.com/ipfs/go-ipfs-blockstore v1.1.2
 	github.com/ipfs/go-log/v2 v2.5.0
 	github.com/ipfs/go-metrics-interface v0.0.1
@@ -76,7 +78,6 @@ require (
 	github.com/filecoin-project/go-cbor-util v0.0.1 // indirect
 	github.com/filecoin-project/go-commp-utils v0.1.3 // indirect
 	github.com/filecoin-project/go-crypto v0.0.1 // indirect
-	github.com/filecoin-project/go-data-transfer v1.14.0 // indirect
 	github.com/filecoin-project/go-ds-versioning v0.1.1 // indirect
 	github.com/filecoin-project/go-fil-commcid v0.1.0 // indirect
 	github.com/filecoin-project/go-fil-commp-hashhash v0.1.0 // indirect
@@ -133,7 +134,6 @@ require (
 	github.com/ipfs/go-ds-badger2 v0.1.2 // indirect
 	github.com/ipfs/go-ds-measure v0.2.0 // indirect
 	github.com/ipfs/go-fs-lock v0.0.6 // indirect
-	github.com/ipfs/go-graphsync v0.12.0 // indirect
 	github.com/ipfs/go-ipfs-cmds v0.3.0 // indirect
 	github.com/ipfs/go-ipfs-ds-help v1.1.0 // indirect
 	github.com/ipfs/go-ipfs-exchange-interface v0.1.0 // indirect
