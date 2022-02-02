@@ -189,7 +189,7 @@ require (
 	github.com/libp2p/go-libp2p-resource-manager v0.1.2 // indirect
 	github.com/libp2p/go-libp2p-swarm v0.10.1 // indirect
 	github.com/libp2p/go-libp2p-tls v0.3.1 // indirect
-	github.com/libp2p/go-libp2p-transport-upgrader v0.7.0 // indirect
+	github.com/libp2p/go-libp2p-transport-upgrader v0.7.1-0.20220202172836-b19a80d59b95 // indirect
 	github.com/libp2p/go-libp2p-xor v0.0.0-20210714161855-5c005aca55db // indirect
 	github.com/libp2p/go-libp2p-yamux v0.8.1 // indirect
 	github.com/libp2p/go-mplex v0.4.0 // indirect
