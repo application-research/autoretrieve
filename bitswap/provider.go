@@ -87,8 +87,12 @@ func (provider *Provider) startSend() {
 	defer provider.sendWorkerCountLk.Unlock()
 
 	if provider.sendWorkerCount < provider.config.MaxSendWorkers {
-		provider.sendWorkerCount++
 		go func() {
+			provider.sendWorkerCountLk.Lock()
+			provider.sendWorkerCount++
+			logger.Debugf("Started send worker (%v active)", provider.sendWorkerCount)
+			provider.sendWorkerCountLk.Unlock()
+
 			for {
 				peer, tasks, _ := provider.taskQueue.PopTasks(targetMessageSize)
 
@@ -116,6 +120,7 @@ func (provider *Provider) startSend() {
 
 			provider.sendWorkerCountLk.Lock()
 			provider.sendWorkerCount--
+			logger.Debugf("Send worker shut down (%v active)", provider.sendWorkerCount)
 			provider.sendWorkerCountLk.Unlock()
 		}()
 	}
