@@ -87,11 +87,11 @@ func (provider *Provider) startSend() {
 	defer provider.sendWorkerCountLk.Unlock()
 
 	if provider.sendWorkerCount < provider.config.MaxSendWorkers {
+		provider.sendWorkerCount++
+		logger.Debugf("Started send worker (%v active)", provider.sendWorkerCount)
+
 		go func() {
-			provider.sendWorkerCountLk.Lock()
-			provider.sendWorkerCount++
-			logger.Debugf("Started send worker (%v active)", provider.sendWorkerCount)
-			provider.sendWorkerCountLk.Unlock()
+			messageCount := 0
 
 			for {
 				peer, tasks, _ := provider.taskQueue.PopTasks(targetMessageSize)
@@ -116,11 +116,13 @@ func (provider *Provider) startSend() {
 				if err := provider.network.SendMessage(context.Background(), peer, msg); err != nil {
 					logger.Errorf("Could not send bitswap message to %s: %v", peer, err)
 				}
+
+				messageCount++
 			}
 
 			provider.sendWorkerCountLk.Lock()
 			provider.sendWorkerCount--
-			logger.Debugf("Send worker shut down (%v active)", provider.sendWorkerCount)
+			logger.Debugf("Send worker shut down after %v messages (%v active)", messageCount, provider.sendWorkerCount)
 			provider.sendWorkerCountLk.Unlock()
 		}()
 	}
