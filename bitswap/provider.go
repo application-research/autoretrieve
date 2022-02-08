@@ -86,7 +86,7 @@ func (provider *Provider) startSend() {
 	provider.sendWorkerCountLk.Lock()
 	defer provider.sendWorkerCountLk.Unlock()
 
-	if provider.sendWorkerCount < provider.config.MaxSendWorkers {
+	if provider.sendWorkerCount < provider.config.MaxSendWorkers && provider.taskQueue.Stats().NumPending != 0 {
 		provider.sendWorkerCount++
 		logger.Debugf("Started send worker (%v active)", provider.sendWorkerCount)
 
