@@ -142,9 +142,6 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 
 entryLoop:
 	for _, entry := range incoming.Wantlist() {
-
-		logger.Debugf("Got message type: %s", entry.WantType.String())
-
 		// Only respond to WANT_HAVE and WANT_BLOCK
 		if entry.WantType != wantTypeHave && entry.WantType != wantTypeBlock {
 			logger.Debugf("Other message type: %s", entry.WantType.String())

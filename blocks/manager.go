@@ -46,6 +46,10 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 }
 
 func (mgr *Manager) GetAwait(ctx context.Context, cid cid.Cid, callback func(Block)) error {
+	// We need to lock the blockstore here to make sure the requested block
+	// doesn't get added while being added to the waitlist
+	mgr.waitListLk.Lock()
+
 	block, err := mgr.Get(ctx, cid)
 
 	// If we couldn't get the block, we add it to the waitlist - the block will
@@ -55,43 +59,55 @@ func (mgr *Manager) GetAwait(ctx context.Context, cid cid.Cid, callback func(Blo
 			return err
 		}
 
-		mgr.waitListLk.Lock()
 		mgr.waitList[cid] = append(mgr.waitList[cid], callback)
+
 		mgr.waitListLk.Unlock()
 
 		return nil
 	}
 
-	// Otherwise, we can immediately populate the channel
+	mgr.waitListLk.Unlock()
+
+	// Otherwise, we can immediately run the callback
 	callback(block)
 
 	return nil
 }
 
 func (mgr *Manager) Put(ctx context.Context, block blocks.Block) error {
+
+	// Make sure we aren't putting while a callback is being registered
+	mgr.waitListLk.Lock()
+	defer mgr.waitListLk.Unlock()
+
 	// We do this first since it should catch any errors with block being nil
 	if err := mgr.Blockstore.Put(ctx, block); err != nil {
 		return err
 	}
 
-	mgr.notifyWaitChans(block)
+	mgr.notifyWaitCallbacks(block)
 
 	return nil
 }
 
 func (mgr *Manager) PutMany(ctx context.Context, blocks []blocks.Block) error {
+
+	// Make sure we aren't putting while a callback is being registered
+	mgr.waitListLk.Lock()
+	defer mgr.waitListLk.Unlock()
+
 	if err := mgr.Blockstore.PutMany(ctx, blocks); err != nil {
 		return err
 	}
 
 	for _, block := range blocks {
-		mgr.notifyWaitChans(block)
+		mgr.notifyWaitCallbacks(block)
 	}
 
 	return nil
 }
 
-func (mgr *Manager) notifyWaitChans(block Block) {
+func (mgr *Manager) notifyWaitCallbacks(block Block) {
 	cid := block.Cid()
 
 	mgr.waitListLk.Lock()
