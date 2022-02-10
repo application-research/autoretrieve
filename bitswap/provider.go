@@ -106,10 +106,13 @@ func (provider *Provider) startSend() {
 					switch task.Topic {
 					case topicSendBlock:
 						msg.AddBlock(task.Data.(blocks.Block))
+						logger.Debugf("Sending block")
 					case topicSendHave:
 						msg.AddHave(task.Data.(cid.Cid))
+						logger.Debugf("Sending have")
 					case topicSendDontHave:
 						msg.AddDontHave(task.Data.(cid.Cid))
+						logger.Debugf("Sending don't have")
 					}
 				}
 
@@ -142,6 +145,7 @@ entryLoop:
 
 		// Only respond to WANT_HAVE and WANT_BLOCK
 		if entry.WantType != wantTypeHave && entry.WantType != wantTypeBlock {
+			logger.Debugf("Other message type: %s", entry.WantType.String())
 			continue
 		}
 
