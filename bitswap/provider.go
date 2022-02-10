@@ -94,11 +94,7 @@ func (provider *Provider) startSend() {
 			messageCount := 0
 
 			for {
-				peer, tasks, _ := provider.taskQueue.PopTasks(targetMessageSize)
-
-				if len(tasks) == 0 {
-					break
-				}
+				peer, tasks, pending := provider.taskQueue.PopTasks(targetMessageSize)
 
 				msg := message.New(false)
 
@@ -118,6 +114,10 @@ func (provider *Provider) startSend() {
 
 				if err := provider.network.SendMessage(context.Background(), peer, msg); err != nil {
 					logger.Errorf("Could not send bitswap message to %s: %v", peer, err)
+				}
+
+				if pending == 0 {
+					break
 				}
 
 				messageCount++
