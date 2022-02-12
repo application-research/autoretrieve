@@ -138,7 +138,7 @@ func (provider *Provider) startSend() {
 					logger.Errorf("Could not send bitswap message to %s: %v", peer, err)
 				}
 
-				if pending == 0 {
+				if pending <= 0 {
 					break
 				}
 
