@@ -262,21 +262,37 @@ func run(cctx *cli.Context) error {
 		logger.Errorf("FilClient initialization failed: %v", err)
 	}
 	// Initialize Filecoin retriever
-	retriever, err := filecoin.NewRetriever(filecoin.RetrieverConfig{
-		MinerBlacklist:         minerBlacklist,
-		MinerWhitelist:         minerWhitelist,
-		RetrievalTimeout:       timeout,
-		PerMinerRetrievalLimit: perMinerRetrievalLimit,
-		Metrics:                metricsInst,
-	}, fc, endpoint, host, api, datastore, blockManager)
+	retriever, err := filecoin.NewRetriever(
+		filecoin.RetrieverConfig{
+			MinerBlacklist:         minerBlacklist,
+			MinerWhitelist:         minerWhitelist,
+			RetrievalTimeout:       timeout,
+			PerMinerRetrievalLimit: perMinerRetrievalLimit,
+			Metrics:                metricsInst,
+		},
+		fc,
+		endpoint,
+		host,
+		api,
+		datastore,
+		blockManager,
+	)
 	if err != nil {
 		return err
 	}
 
 	// Initialize Bitswap provider
-	_, err = bitswap.NewProvider(bitswap.ProviderConfig{
-		MaxSendWorkers: uint(maxSendWorkers),
-	}, host, datastore, blockManager, retriever)
+	_, err = bitswap.NewProvider(
+		cctx.Context,
+		bitswap.ProviderConfig{
+			MaxSendWorkers: uint(maxSendWorkers),
+			UseFullRT:      false,
+		},
+		host,
+		datastore,
+		blockManager,
+		retriever,
+	)
 	if err != nil {
 		return err
 	}

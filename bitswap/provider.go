@@ -16,6 +16,7 @@ import (
 	"github.com/ipfs/go-peertaskqueue/peertask"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/routing"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/fullrt"
 )
@@ -39,6 +40,7 @@ const targetMessageSize = 16384
 
 type ProviderConfig struct {
 	MaxSendWorkers uint
+	UseFullRT      bool
 }
 
 type Provider struct {
@@ -52,6 +54,7 @@ type Provider struct {
 }
 
 func NewProvider(
+	ctx context.Context,
 	config ProviderConfig,
 	host host.Host,
 	datastore datastore.Batching,
@@ -59,18 +62,37 @@ func NewProvider(
 	retriever *filecoin.Retriever,
 ) (*Provider, error) {
 
-	fullRT, err := fullrt.NewFullRT(host, dht.DefaultPrefix, fullrt.DHTOption(
-		dht.Datastore(datastore),
-		dht.BucketSize(20),
-		dht.BootstrapPeers(dht.GetDefaultBootstrapPeerAddrInfos()...),
-	))
-	if err != nil {
-		return nil, err
+	var routing routing.ContentRouting
+
+	if config.UseFullRT {
+		fullRT, err := fullrt.NewFullRT(host, dht.DefaultPrefix, fullrt.DHTOption(
+			dht.Datastore(datastore),
+			dht.BucketSize(20),
+			dht.BootstrapPeers(dht.GetDefaultBootstrapPeerAddrInfos()...),
+		))
+		if err != nil {
+			return nil, err
+		}
+
+		routing = fullRT
+	} else {
+		dht, err := dht.New(
+			ctx,
+			host,
+			dht.Datastore(datastore),
+			dht.BucketSize(20),
+			dht.BootstrapPeers(dht.GetDefaultBootstrapPeerAddrInfos()...),
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		routing = dht
 	}
 
 	provider := &Provider{
 		config:          config,
-		network:         network.NewFromIpfsHost(host, fullRT),
+		network:         network.NewFromIpfsHost(host, routing),
 		blockManager:    blockManager,
 		retriever:       retriever,
 		taskQueue:       peertaskqueue.New(),
