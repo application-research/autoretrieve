@@ -194,6 +194,16 @@ entryLoop:
 				})
 				logger.Debugf("Queueing block %s", block.Cid())
 			}
+		case provider.retriever == nil:
+			// If the provider is disabled, we can't really do anything, send
+			// DONT_HAVE
+			provider.taskQueue.PushTasks(sender, peertask.Task{
+				Topic:    topicSendDontHave,
+				Priority: 0,
+				Work:     entry.Cid.ByteLen(),
+				Data:     entry.Cid,
+			})
+			logger.Debugf("Queueing DONT_HAVE for block %s (retrievals disabled)", entry.Cid)
 		default:
 			// Otherwise, we will need to ask for it...
 			if err := provider.retriever.Request(entry.Cid); err != nil {

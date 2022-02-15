@@ -81,6 +81,10 @@ func main() {
 			Value: 4,
 			Usage: "Max bitswap message sender worker thread count",
 		},
+		&cli.BoolFlag{
+			Name:  "disable-retrieval",
+			Usage: "Whether to disable the retriever module, for testing provider only",
+		},
 		flagWhitelist,
 		flagBlacklist,
 	}
@@ -262,23 +266,27 @@ func run(cctx *cli.Context) error {
 		logger.Errorf("FilClient initialization failed: %v", err)
 	}
 	// Initialize Filecoin retriever
-	retriever, err := filecoin.NewRetriever(
-		filecoin.RetrieverConfig{
-			MinerBlacklist:         minerBlacklist,
-			MinerWhitelist:         minerWhitelist,
-			RetrievalTimeout:       timeout,
-			PerMinerRetrievalLimit: perMinerRetrievalLimit,
-			Metrics:                metricsInst,
-		},
-		fc,
-		endpoint,
-		host,
-		api,
-		datastore,
-		blockManager,
-	)
-	if err != nil {
-		return err
+	var retriever *filecoin.Retriever
+	if !cctx.Bool("disable-retrieval") {
+		retriever_, err := filecoin.NewRetriever(
+			filecoin.RetrieverConfig{
+				MinerBlacklist:         minerBlacklist,
+				MinerWhitelist:         minerWhitelist,
+				RetrievalTimeout:       timeout,
+				PerMinerRetrievalLimit: perMinerRetrievalLimit,
+				Metrics:                metricsInst,
+			},
+			fc,
+			endpoint,
+			host,
+			api,
+			datastore,
+			blockManager,
+		)
+		if err != nil {
+			return err
+		}
+		retriever = retriever_
 	}
 
 	// Initialize Bitswap provider
@@ -291,7 +299,7 @@ func run(cctx *cli.Context) error {
 		host,
 		datastore,
 		blockManager,
-		retriever,
+		retriever, // This will be nil if --disable-retrieval is passed
 	)
 	if err != nil {
 		return err
