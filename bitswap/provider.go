@@ -138,6 +138,8 @@ func (provider *Provider) startSend() {
 					}
 				}
 
+				provider.taskQueue.TasksDone(peer, tasks...)
+
 				if err := provider.network.SendMessage(context.Background(), peer, msg); err != nil {
 					logger.Errorf("Could not send bitswap message to %s: %v", peer, err)
 				}
@@ -162,7 +164,6 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 	// For each item in the incoming wantlist, we either need to say whether we
 	// have the block or not, or send the actual block.
 
-entryLoop:
 	for _, entry := range incoming.Wantlist() {
 		// Only respond to WANT_HAVE and WANT_BLOCK
 		if entry.WantType != wantTypeHave && entry.WantType != wantTypeBlock {
@@ -216,35 +217,34 @@ entryLoop:
 					Data:     entry.Cid,
 				})
 				logger.Debugf("Queueing DONT_HAVE for non-retrievable block %s - peer %s", entry.Cid, sender)
-				continue entryLoop
-			}
-
-			// Queue the block to be sent once we get it
-			var callback func(blocks.Block)
-			switch entry.WantType {
-			case wantTypeHave:
-				callback = func(block blocks.Block) {
-					provider.taskQueue.PushTasks(sender, peertask.Task{
-						Topic:    topicSendHave,
-						Priority: 0,
-						Work:     block.Cid().ByteLen(),
-						Data:     block.Cid(),
-					})
-					logger.Debugf("Queueing HAVE for retrievable block %s - peer %s", block.Cid(), sender)
+			} else {
+				// Queue the block to be sent once we get it
+				var callback func(blocks.Block)
+				switch entry.WantType {
+				case wantTypeHave:
+					callback = func(block blocks.Block) {
+						provider.taskQueue.PushTasks(sender, peertask.Task{
+							Topic:    topicSendHave,
+							Priority: 0,
+							Work:     block.Cid().ByteLen(),
+							Data:     block.Cid(),
+						})
+						logger.Debugf("Queueing HAVE for retrievable block %s - peer %s", block.Cid(), sender)
+					}
+				case wantTypeBlock:
+					callback = func(block blocks.Block) {
+						provider.taskQueue.PushTasks(sender, peertask.Task{
+							Topic:    topicSendBlock,
+							Priority: 0,
+							Work:     len(block.RawData()),
+							Data:     block,
+						})
+						logger.Debugf("Queueing retrievable block %s - peer %s", block.Cid(), sender)
+					}
 				}
-			case wantTypeBlock:
-				callback = func(block blocks.Block) {
-					provider.taskQueue.PushTasks(sender, peertask.Task{
-						Topic:    topicSendBlock,
-						Priority: 0,
-						Work:     len(block.RawData()),
-						Data:     block,
-					})
-					logger.Debugf("Queueing retrievable block %s - peer %s", block.Cid(), sender)
+				if err := provider.blockManager.GetAwait(ctx, entry.Cid, callback); err != nil {
+					logger.Errorf("Error waiting for block: %v", err)
 				}
-			}
-			if err := provider.blockManager.GetAwait(ctx, entry.Cid, callback); err != nil {
-				logger.Errorf("Error waiting for block: %v", err)
 			}
 		}
 	}
