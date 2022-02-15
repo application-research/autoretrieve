@@ -184,6 +184,7 @@ entryLoop:
 					Work:     block.Cid().ByteLen(),
 					Data:     block.Cid(),
 				})
+				logger.Debugf("Queueing HAVE for block %s", block.Cid())
 			case wantTypeBlock:
 				provider.taskQueue.PushTasks(sender, peertask.Task{
 					Topic:    topicSendBlock,
@@ -191,6 +192,7 @@ entryLoop:
 					Work:     len(block.RawData()),
 					Data:     block,
 				})
+				logger.Debugf("Queueing block %s", block.Cid())
 			}
 		default:
 			// Otherwise, we will need to ask for it...
@@ -203,6 +205,7 @@ entryLoop:
 					Work:     entry.Cid.ByteLen(),
 					Data:     entry.Cid,
 				})
+				logger.Debugf("Queueing DONT_HAVE for non-retrievable block %s", entry.Cid)
 				continue entryLoop
 			}
 
@@ -217,6 +220,7 @@ entryLoop:
 						Work:     block.Cid().ByteLen(),
 						Data:     block.Cid(),
 					})
+					logger.Debugf("Queueing HAVE for retrievable block %s", block.Cid())
 				}
 			case wantTypeBlock:
 				callback = func(block blocks.Block) {
@@ -226,6 +230,7 @@ entryLoop:
 						Work:     len(block.RawData()),
 						Data:     block,
 					})
+					logger.Debugf("Queueing retrievable block %s", block.Cid())
 				}
 			}
 			if err := provider.blockManager.GetAwait(ctx, entry.Cid, callback); err != nil {
