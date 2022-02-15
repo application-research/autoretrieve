@@ -110,11 +110,8 @@ func (provider *Provider) startSend() {
 
 	if provider.sendWorkerCount < provider.config.MaxSendWorkers && provider.taskQueue.Stats().NumPending != 0 {
 		provider.sendWorkerCount++
-		logger.Debugf("Started send worker (%v active)", provider.sendWorkerCount)
 
 		go func() {
-			messageCount := 0
-
 			for {
 				peer, tasks, _ := provider.taskQueue.PopTasks(targetMessageSize)
 
@@ -128,13 +125,10 @@ func (provider *Provider) startSend() {
 					switch task.Topic {
 					case topicSendBlock:
 						msg.AddBlock(task.Data.(blocks.Block))
-						logger.Debugf("Sending block")
 					case topicSendHave:
 						msg.AddHave(task.Data.(cid.Cid))
-						logger.Debugf("Sending have")
 					case topicSendDontHave:
 						msg.AddDontHave(task.Data.(cid.Cid))
-						logger.Debugf("Sending don't have")
 					}
 				}
 
@@ -143,13 +137,10 @@ func (provider *Provider) startSend() {
 				if err := provider.network.SendMessage(context.Background(), peer, msg); err != nil {
 					logger.Errorf("Could not send bitswap message to %s: %v", peer, err)
 				}
-
-				messageCount++
 			}
 
 			provider.sendWorkerCountLk.Lock()
 			provider.sendWorkerCount--
-			logger.Debugf("Send worker shut down after %v messages (%v active)", messageCount, provider.sendWorkerCount)
 			provider.sendWorkerCountLk.Unlock()
 		}()
 	}
@@ -185,7 +176,6 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 					Work:     block.Cid().ByteLen(),
 					Data:     block.Cid(),
 				})
-				logger.Debugf("Queueing HAVE for block %s - peer %s", block.Cid(), sender)
 			case wantTypeBlock:
 				provider.taskQueue.PushTasks(sender, peertask.Task{
 					Topic:    topicSendBlock,
@@ -193,7 +183,6 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 					Work:     len(block.RawData()),
 					Data:     block,
 				})
-				logger.Debugf("Queueing block %s - peer %s", block.Cid(), sender)
 			}
 		case provider.retriever == nil:
 			// If the provider is disabled, we can't really do anything, send
@@ -204,7 +193,6 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				Work:     entry.Cid.ByteLen(),
 				Data:     entry.Cid,
 			})
-			logger.Debugf("Queueing DONT_HAVE for block %s (retrievals disabled) - peer %s", entry.Cid, sender)
 		default:
 			// Otherwise, we will need to ask for it...
 			if err := provider.retriever.Request(entry.Cid); err != nil {
@@ -216,7 +204,6 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 					Work:     entry.Cid.ByteLen(),
 					Data:     entry.Cid,
 				})
-				logger.Debugf("Queueing DONT_HAVE for non-retrievable block %s - peer %s", entry.Cid, sender)
 			} else {
 				// Queue the block to be sent once we get it
 				var callback func(blocks.Block)
@@ -229,7 +216,6 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 							Work:     block.Cid().ByteLen(),
 							Data:     block.Cid(),
 						})
-						logger.Debugf("Queueing HAVE for retrievable block %s - peer %s", block.Cid(), sender)
 					}
 				case wantTypeBlock:
 					callback = func(block blocks.Block) {
@@ -239,7 +225,6 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 							Work:     len(block.RawData()),
 							Data:     block,
 						})
-						logger.Debugf("Queueing retrievable block %s - peer %s", block.Cid(), sender)
 					}
 				}
 				if err := provider.blockManager.GetAwait(ctx, entry.Cid, callback); err != nil {
