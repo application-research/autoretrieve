@@ -166,7 +166,7 @@ entryLoop:
 	for _, entry := range incoming.Wantlist() {
 		// Only respond to WANT_HAVE and WANT_BLOCK
 		if entry.WantType != wantTypeHave && entry.WantType != wantTypeBlock {
-			logger.Debugf("Other message type: %s", entry.WantType.String())
+			logger.Debugf("Other message type: %s - peer %s", entry.WantType.String(), sender)
 			continue
 		}
 
@@ -184,7 +184,7 @@ entryLoop:
 					Work:     block.Cid().ByteLen(),
 					Data:     block.Cid(),
 				})
-				logger.Debugf("Queueing HAVE for block %s", block.Cid())
+				logger.Debugf("Queueing HAVE for block %s - peer %s", block.Cid(), sender)
 			case wantTypeBlock:
 				provider.taskQueue.PushTasks(sender, peertask.Task{
 					Topic:    topicSendBlock,
@@ -192,7 +192,7 @@ entryLoop:
 					Work:     len(block.RawData()),
 					Data:     block,
 				})
-				logger.Debugf("Queueing block %s", block.Cid())
+				logger.Debugf("Queueing block %s - peer %s", block.Cid(), sender)
 			}
 		case provider.retriever == nil:
 			// If the provider is disabled, we can't really do anything, send
@@ -203,7 +203,7 @@ entryLoop:
 				Work:     entry.Cid.ByteLen(),
 				Data:     entry.Cid,
 			})
-			logger.Debugf("Queueing DONT_HAVE for block %s (retrievals disabled)", entry.Cid)
+			logger.Debugf("Queueing DONT_HAVE for block %s (retrievals disabled) - peer %s", entry.Cid, sender)
 		default:
 			// Otherwise, we will need to ask for it...
 			if err := provider.retriever.Request(entry.Cid); err != nil {
@@ -215,7 +215,7 @@ entryLoop:
 					Work:     entry.Cid.ByteLen(),
 					Data:     entry.Cid,
 				})
-				logger.Debugf("Queueing DONT_HAVE for non-retrievable block %s", entry.Cid)
+				logger.Debugf("Queueing DONT_HAVE for non-retrievable block %s - peer %s", entry.Cid, sender)
 				continue entryLoop
 			}
 
@@ -230,7 +230,7 @@ entryLoop:
 						Work:     block.Cid().ByteLen(),
 						Data:     block.Cid(),
 					})
-					logger.Debugf("Queueing HAVE for retrievable block %s", block.Cid())
+					logger.Debugf("Queueing HAVE for retrievable block %s - peer %s", block.Cid(), sender)
 				}
 			case wantTypeBlock:
 				callback = func(block blocks.Block) {
@@ -240,7 +240,7 @@ entryLoop:
 						Work:     len(block.RawData()),
 						Data:     block,
 					})
-					logger.Debugf("Queueing retrievable block %s", block.Cid())
+					logger.Debugf("Queueing retrievable block %s - peer %s", block.Cid(), sender)
 				}
 			}
 			if err := provider.blockManager.GetAwait(ctx, entry.Cid, callback); err != nil {
