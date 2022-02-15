@@ -387,7 +387,7 @@ func initHost(ctx context.Context, dataDir string, listenAddrs ...multiaddr.Mult
 		panic("sanity check: peer key is uninitialized")
 	}
 
-	host, err := libp2p.New(libp2p.ListenAddrs(listenAddrs...), libp2p.Identity(peerkey))
+	host, err := libp2p.New(libp2p.ListenAddrs(listenAddrs...), libp2p.Identity(peerkey), libp2p.ResourceManager(network.NullResourceManager))
 	if err != nil {
 		return nil, err
 	}
