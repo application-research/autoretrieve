@@ -85,6 +85,10 @@ func main() {
 			Name:  "disable-retrieval",
 			Usage: "Whether to disable the retriever module, for testing provider only",
 		},
+		&cli.BoolFlag{
+			Name:  "fullrt",
+			Usage: "Whether to use the full routing table instead of DHT",
+		},
 		flagWhitelist,
 		flagBlacklist,
 	}
@@ -294,7 +298,7 @@ func run(cctx *cli.Context) error {
 		cctx.Context,
 		bitswap.ProviderConfig{
 			MaxSendWorkers: uint(maxSendWorkers),
-			UseFullRT:      false,
+			UseFullRT:      cctx.Bool("fullrt"),
 		},
 		host,
 		datastore,
