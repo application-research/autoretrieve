@@ -15,6 +15,7 @@ import (
 
 	"github.com/application-research/autoretrieve/bitswap"
 	"github.com/application-research/autoretrieve/blocks"
+	"github.com/application-research/autoretrieve/endpoint"
 	"github.com/application-research/autoretrieve/filecoin"
 	"github.com/application-research/autoretrieve/metrics"
 	"github.com/application-research/filclient"
@@ -30,6 +31,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
@@ -75,6 +77,11 @@ func main() {
 		&cli.StringFlag{
 			Name:  "endpoint",
 			Value: "https://api.estuary.tech/retrieval-candidates",
+		},
+		&cli.StringFlag{
+			Name:  "endpoint-type",
+			Value: "estuary",
+			Usage: "type of endpoint for finding data (valid values are \"estuary\" and \"indexer\")",
 		},
 		&cli.UintFlag{
 			Name:  "max-send-workers",
@@ -135,7 +142,8 @@ func contextWithInterruptCancel() context.Context {
 // Main command entry point.
 func run(cctx *cli.Context) error {
 	dataDir := cctx.String("datadir")
-	endpoint := cctx.String("endpoint")
+	endpointURL := cctx.String("endpoint")
+	endpointType := cctx.String("endpoint-type")
 	timeout := cctx.Duration("timeout")
 	maxSendWorkers := cctx.Uint("max-send-workers")
 	perMinerRetrievalLimit := cctx.Uint("per-miner-retrieval-limit")
@@ -272,16 +280,36 @@ func run(cctx *cli.Context) error {
 	// Initialize Filecoin retriever
 	var retriever *filecoin.Retriever
 	if !cctx.Bool("disable-retrieval") {
-		retriever_, err := filecoin.NewRetriever(
+		minerPeerBlackList, err := toMinerPeerList(cctx.Context, fc, minerBlacklist)
+		if err != nil {
+			return err
+		}
+		minerPeerWhiteList, err := toMinerPeerList(cctx.Context, fc, minerWhitelist)
+		if err != nil {
+			return err
+		}
+		var ep filecoin.Endpoint
+		switch endpointType {
+		case "estuary":
+			ep = endpoint.NewEstuaryEndpoint(fc, endpointURL)
+		case "indexer":
+			ep, err = endpoint.NewIndexerEndpoint(endpointURL)
+			if err != nil {
+				return err
+			}
+		default:
+			return errors.New("unrecognized endpoint type")
+		}
+		retriever, err = filecoin.NewRetriever(
 			filecoin.RetrieverConfig{
-				MinerBlacklist:         minerBlacklist,
-				MinerWhitelist:         minerWhitelist,
+				MinerBlacklist:         minerPeerBlackList,
+				MinerWhitelist:         minerPeerWhiteList,
 				RetrievalTimeout:       timeout,
 				PerMinerRetrievalLimit: perMinerRetrievalLimit,
 				Metrics:                metricsInst,
 			},
 			fc,
-			endpoint,
+			ep,
 			host,
 			api,
 			datastore,
@@ -290,7 +318,6 @@ func run(cctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		retriever = retriever_
 	}
 
 	// Initialize Bitswap provider
@@ -506,4 +533,16 @@ func getWhitelist(cctx *cli.Context) (map[address.Address]bool, error) {
 
 func getBlacklist(cctx *cli.Context) (map[address.Address]bool, error) {
 	return getList(cctx, "blacklist", filepath.Join(cctx.String("datadir"), minerBlacklistFilename))
+}
+
+func toMinerPeerList(ctx context.Context, fc *filclient.FilClient, minerList map[address.Address]bool) (map[peer.ID]bool, error) {
+	minerPeerList := make(map[peer.ID]bool, len(minerList))
+	for maddr, status := range minerList {
+		minerPeer, err := fc.MinerPeer(ctx, maddr)
+		if err != nil {
+			return nil, err
+		}
+		minerPeerList[minerPeer.ID] = status
+	}
+	return minerPeerList, nil
 }

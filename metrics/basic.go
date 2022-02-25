@@ -51,7 +51,7 @@ func (metrics *Basic) RecordQueryResult(info CandidateInfo, result QueryResult) 
 	if result.Err != nil {
 		metrics.logger.Errorf(
 			"Failed to query miner %s for %s: %v",
-			info.Miner,
+			info.PeerID,
 			formatCidAndRoot(info.RequestCid, info.RootCid, false),
 			result.Err,
 		)
@@ -61,7 +61,7 @@ func (metrics *Basic) RecordQueryResult(info CandidateInfo, result QueryResult) 
 func (metrics *Basic) RecordRetrieval(info CandidateInfo) {
 	metrics.logger.Infof(
 		"Attempting retrieval from miner %s for %s",
-		info.Miner,
+		info.PeerID,
 		formatCidAndRoot(info.RequestCid, info.RootCid, false),
 	)
 }
@@ -70,7 +70,7 @@ func (metrics *Basic) RecordRetrievalResult(info CandidateInfo, result Retrieval
 	if result.Err != nil {
 		metrics.logger.Errorf(
 			"Failed to retrieve from miner %s for %s: %v",
-			info.Miner,
+			info.PeerID,
 			formatCidAndRoot(info.RequestCid, info.RootCid, false),
 			result.Err,
 		)
@@ -80,7 +80,7 @@ func (metrics *Basic) RecordRetrievalResult(info CandidateInfo, result Retrieval
 				"\tDuration: %s\n"+
 				"\tBytes Received: %s\n"+
 				"\tTotal Payment: %s",
-			info.Miner,
+			info.PeerID,
 			formatCidAndRoot(info.RequestCid, info.RootCid, false),
 			result.Duration,
 			humanize.IBytes(result.BytesReceived),

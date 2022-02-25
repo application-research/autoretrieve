@@ -6,6 +6,7 @@ import (
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/lotus/chain/types"
 	"github.com/ipfs/go-cid"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
 type WalletInfo struct {
@@ -24,8 +25,8 @@ type CandidateInfo struct {
 	// The root CID that will be retrieved from the miner
 	RootCid cid.Cid
 
-	// Miner to retrieve from
-	Miner address.Address
+	// Peer ID to retrieve from
+	PeerID peer.ID
 }
 
 type GetCandidatesResult struct {
