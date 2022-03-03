@@ -25,7 +25,7 @@ func NewIndexerEndpoint(url string) (*IndexerEndpoint, error) {
 
 func (idxf *IndexerEndpoint) FindCandidates(ctx context.Context, cid cid.Cid) ([]filecoin.RetrievalCandidate, error) {
 	parsedResp, err := idxf.Client.Find(ctx, cid.Hash())
-	if err == nil {
+	if err != nil {
 		return nil, err
 	}
 	hash := string(cid.Hash())
