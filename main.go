@@ -293,10 +293,7 @@ func run(cctx *cli.Context) error {
 		case "estuary":
 			ep = endpoint.NewEstuaryEndpoint(fc, endpointURL)
 		case "indexer":
-			ep, err = endpoint.NewIndexerEndpoint(endpointURL)
-			if err != nil {
-				return err
-			}
+			ep = endpoint.NewIndexerEndpoint(endpointURL)
 		default:
 			return errors.New("unrecognized endpoint type")
 		}
