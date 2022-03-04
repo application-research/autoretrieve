@@ -352,7 +352,7 @@ func run(cctx *cli.Context) error {
 							totalSuccesses++
 							continue
 						}
-						fmt.Fprintf(w, dtOutput, state.OtherPeer(), state.BaseCID(), datatransfer.Statuses[state.Status()], state.Received())
+						fmt.Fprintf(w, dtOutput, state.OtherPeer(), state.BaseCID(), datatransfer.Statuses[state.Status()], state.Received(), state.Message())
 					}
 					w.Flush()
 					fmt.Printf("\nTotal Successes: %d, Total Failures: %d\n\n", totalSuccesses, totalFailures)
