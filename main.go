@@ -341,7 +341,7 @@ func run(cctx *cli.Context) error {
 					}
 					totalSuccesses := 0
 					totalFailures := 0
-					fmt.Printf("Data transfer status\n\n")
+					fmt.Printf("\nData transfer status\n\n")
 					fmt.Fprintln(w, dtHeaders)
 					for _, state := range transfers {
 						if state.Status() == datatransfer.Cancelled || state.Status() == datatransfer.Failed {
@@ -355,7 +355,7 @@ func run(cctx *cli.Context) error {
 						fmt.Fprintf(w, dtOutput, state.OtherPeer(), state.BaseCID(), datatransfer.Statuses[state.Status()], state.Received())
 					}
 					w.Flush()
-					fmt.Printf("\nTotal Successes: %d, Total Failures: %d\n", totalSuccesses, totalFailures)
+					fmt.Printf("\nTotal Successes: %d, Total Failures: %d\n\n", totalSuccesses, totalFailures)
 				}
 			}()
 		}
@@ -384,8 +384,8 @@ func run(cctx *cli.Context) error {
 	return nil
 }
 
-var dtHeaders = "peer\tcid\tstatus\ttransferred"
-var dtOutput = "%s\t%s\t%s\t%d\n"
+var dtHeaders = "peer\tcid\tstatus\ttransferred\tmessage"
+var dtOutput = "%s\t%s\t%s\t%d\t%s\n"
 
 func cmdCheckBlacklist(cctx *cli.Context) error {
 	minerBlacklist, err := getBlacklist(cctx)
