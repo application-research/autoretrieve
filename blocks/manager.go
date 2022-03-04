@@ -83,11 +83,15 @@ func (mgr *Manager) Put(ctx context.Context, block blocks.Block) error {
 	mgr.waitListLk.Lock()
 	defer mgr.waitListLk.Unlock()
 
+	log.Debugw("inside lock save block", "cid", block.Cid())
+
 	// We do this first since it should catch any errors with block being nil
 	if err := mgr.Blockstore.Put(ctx, block); err != nil {
 		log.Debugw("err save block", "cid", block.Cid(), "error", err)
 		return err
 	}
+
+	log.Debugw("publish callbacks", "cid", block.Cid())
 
 	mgr.notifyWaitCallbacks(block)
 
