@@ -11,15 +11,18 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"text/tabwriter"
 	"time"
 
 	"github.com/application-research/autoretrieve/bitswap"
 	"github.com/application-research/autoretrieve/blocks"
+	"github.com/application-research/autoretrieve/endpoint"
 	"github.com/application-research/autoretrieve/filecoin"
 	"github.com/application-research/autoretrieve/metrics"
 	"github.com/application-research/filclient"
 	"github.com/application-research/filclient/keystore"
 	"github.com/filecoin-project/go-address"
+	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/go-data-transfer/channelmonitor"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	lcli "github.com/filecoin-project/lotus/cli"
@@ -30,6 +33,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
@@ -76,6 +80,11 @@ func main() {
 			Name:  "endpoint",
 			Value: "https://api.estuary.tech/retrieval-candidates",
 		},
+		&cli.StringFlag{
+			Name:  "endpoint-type",
+			Value: "estuary",
+			Usage: "type of endpoint for finding data (valid values are \"estuary\" and \"indexer\")",
+		},
 		&cli.UintFlag{
 			Name:  "max-send-workers",
 			Value: 4,
@@ -88,6 +97,14 @@ func main() {
 		&cli.BoolFlag{
 			Name:  "fullrt",
 			Usage: "Whether to use the full routing table instead of DHT",
+		},
+		&cli.BoolFlag{
+			Name:  "log-resource-manager",
+			Usage: "Whether to present output about the current state of the libp2p resource manager",
+		},
+		&cli.BoolFlag{
+			Name:  "log-retrievals",
+			Usage: "Wehther to present periodic output about the progress of retrievals",
 		},
 		flagWhitelist,
 		flagBlacklist,
@@ -135,7 +152,8 @@ func contextWithInterruptCancel() context.Context {
 // Main command entry point.
 func run(cctx *cli.Context) error {
 	dataDir := cctx.String("datadir")
-	endpoint := cctx.String("endpoint")
+	endpointURL := cctx.String("endpoint")
+	endpointType := cctx.String("endpoint-type")
 	timeout := cctx.Duration("timeout")
 	maxSendWorkers := cctx.Uint("max-send-workers")
 	perMinerRetrievalLimit := cctx.Uint("per-miner-retrieval-limit")
@@ -183,7 +201,7 @@ func run(cctx *cli.Context) error {
 	}
 
 	// Initialize P2P host
-	host, err := initHost(cctx.Context, dataDir, multiaddr.StringCast("/ip4/0.0.0.0/tcp/6746"))
+	host, err := initHost(cctx.Context, dataDir, cctx.Bool("log-resource-manager"), multiaddr.StringCast("/ip4/0.0.0.0/tcp/6746"))
 	if err != nil {
 		return err
 	}
@@ -272,16 +290,33 @@ func run(cctx *cli.Context) error {
 	// Initialize Filecoin retriever
 	var retriever *filecoin.Retriever
 	if !cctx.Bool("disable-retrieval") {
-		retriever_, err := filecoin.NewRetriever(
+		minerPeerBlackList, err := toMinerPeerList(cctx.Context, fc, minerBlacklist)
+		if err != nil {
+			return err
+		}
+		minerPeerWhiteList, err := toMinerPeerList(cctx.Context, fc, minerWhitelist)
+		if err != nil {
+			return err
+		}
+		var ep filecoin.Endpoint
+		switch endpointType {
+		case "estuary":
+			ep = endpoint.NewEstuaryEndpoint(fc, endpointURL)
+		case "indexer":
+			ep = endpoint.NewIndexerEndpoint(endpointURL)
+		default:
+			return errors.New("unrecognized endpoint type")
+		}
+		retriever, err = filecoin.NewRetriever(
 			filecoin.RetrieverConfig{
-				MinerBlacklist:         minerBlacklist,
-				MinerWhitelist:         minerWhitelist,
+				MinerBlacklist:         minerPeerBlackList,
+				MinerWhitelist:         minerPeerWhiteList,
 				RetrievalTimeout:       timeout,
 				PerMinerRetrievalLimit: perMinerRetrievalLimit,
 				Metrics:                metricsInst,
 			},
 			fc,
-			endpoint,
+			ep,
 			host,
 			api,
 			datastore,
@@ -290,7 +325,40 @@ func run(cctx *cli.Context) error {
 		if err != nil {
 			return err
 		}
-		retriever = retriever_
+		if cctx.Bool("log-retrievals") {
+			w := tabwriter.NewWriter(os.Stdout, 5, 0, 3, ' ', 0)
+			go func() {
+				for range time.Tick(time.Second * 10) {
+					select {
+					case <-cctx.Context.Done():
+						return
+					default:
+					}
+					transfers, err := fc.TransfersInProgress(cctx.Context)
+					if err != nil {
+						logger.Errorf("unable to fetch transfers in progress: %s", err.Error())
+						return
+					}
+					totalSuccesses := 0
+					totalFailures := 0
+					fmt.Printf("\nData transfer status\n\n")
+					fmt.Fprintln(w, dtHeaders)
+					for _, state := range transfers {
+						if state.Status() == datatransfer.Cancelled || state.Status() == datatransfer.Failed {
+							totalFailures++
+							continue
+						}
+						if state.Status() == datatransfer.Completed {
+							totalSuccesses++
+							continue
+						}
+						fmt.Fprintf(w, dtOutput, state.OtherPeer(), state.BaseCID(), datatransfer.Statuses[state.Status()], state.Received(), state.Message())
+					}
+					w.Flush()
+					fmt.Printf("\nTotal Successes: %d, Total Failures: %d\n\n", totalSuccesses, totalFailures)
+				}
+			}()
+		}
 	}
 
 	// Initialize Bitswap provider
@@ -315,6 +383,9 @@ func run(cctx *cli.Context) error {
 
 	return nil
 }
+
+var dtHeaders = "peer\tcid\tstatus\ttransferred\tmessage"
+var dtOutput = "%s\t%s\t%s\t%d\t%s\n"
 
 func cmdCheckBlacklist(cctx *cli.Context) error {
 	minerBlacklist, err := getBlacklist(cctx)
@@ -361,7 +432,7 @@ number of inbound streams: %d,
 number of outbound streams: %d,
 `
 
-func initHost(ctx context.Context, dataDir string, listenAddrs ...multiaddr.Multiaddr) (host.Host, error) {
+func initHost(ctx context.Context, dataDir string, resourceManagerStats bool, listenAddrs ...multiaddr.Multiaddr) (host.Host, error) {
 	var peerkey crypto.PrivKey
 	keyPath := filepath.Join(dataDir, "peerkey")
 	keyFile, err := os.ReadFile(keyPath)
@@ -404,24 +475,26 @@ func initHost(ctx context.Context, dataDir string, listenAddrs ...multiaddr.Mult
 		return nil, err
 	}
 
-	go func() {
-		for range time.Tick(time.Second * 10) {
-			select {
-			case <-ctx.Done():
-				return
-			default:
+	if resourceManagerStats {
+		go func() {
+			for range time.Tick(time.Second * 10) {
+				select {
+				case <-ctx.Done():
+					return
+				default:
+				}
+				err := host.Network().ResourceManager().ViewSystem(func(scope network.ResourceScope) error {
+					stat := scope.Stat()
+					logger.Infof(statFmtString, stat.Memory, stat.NumConnsInbound, stat.NumConnsOutbound, stat.NumFD, stat.NumStreamsInbound, stat.NumStreamsOutbound)
+					return nil
+				})
+				if err != nil {
+					logger.Errorf("unable to fetch global resource manager scope: %s", err.Error())
+					return
+				}
 			}
-			err := host.Network().ResourceManager().ViewSystem(func(scope network.ResourceScope) error {
-				stat := scope.Stat()
-				logger.Infof(statFmtString, stat.Memory, stat.NumConnsInbound, stat.NumConnsOutbound, stat.NumFD, stat.NumStreamsInbound, stat.NumStreamsOutbound)
-				return nil
-			})
-			if err != nil {
-				logger.Errorf("unable to fetch global resource manager scope: %s", err.Error())
-				return
-			}
-		}
-	}()
+		}()
+	}
 	return host, nil
 }
 
@@ -506,4 +579,16 @@ func getWhitelist(cctx *cli.Context) (map[address.Address]bool, error) {
 
 func getBlacklist(cctx *cli.Context) (map[address.Address]bool, error) {
 	return getList(cctx, "blacklist", filepath.Join(cctx.String("datadir"), minerBlacklistFilename))
+}
+
+func toMinerPeerList(ctx context.Context, fc *filclient.FilClient, minerList map[address.Address]bool) (map[peer.ID]bool, error) {
+	minerPeerList := make(map[peer.ID]bool, len(minerList))
+	for maddr, status := range minerList {
+		minerPeer, err := fc.MinerPeer(ctx, maddr)
+		if err != nil {
+			return nil, err
+		}
+		minerPeerList[minerPeer.ID] = status
+	}
+	return minerPeerList, nil
 }

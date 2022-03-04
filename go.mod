@@ -3,7 +3,7 @@ module github.com/application-research/autoretrieve
 go 1.17
 
 require (
-	github.com/application-research/filclient v0.0.0-20220131225437-3003c00f4f71
+	github.com/application-research/filclient v0.0.0-20220304150921-3d7237f66cd1
 	github.com/dustin/go-humanize v1.0.0
 	github.com/filecoin-project/go-address v0.0.6
 	github.com/filecoin-project/go-data-transfer v1.14.0
@@ -89,6 +89,7 @@ require (
 	github.com/filecoin-project/go-paramfetch v0.0.3-0.20220111000201-e42866db1a53 // indirect
 	github.com/filecoin-project/go-statemachine v1.0.1 // indirect
 	github.com/filecoin-project/go-statestore v0.2.0 // indirect
+	github.com/filecoin-project/index-provider v0.3.1
 	github.com/filecoin-project/specs-actors v0.9.14 // indirect
 	github.com/filecoin-project/specs-actors/v2 v2.3.6 // indirect
 	github.com/filecoin-project/specs-actors/v3 v3.1.1 // indirect
@@ -97,9 +98,10 @@ require (
 	github.com/filecoin-project/specs-actors/v6 v6.0.1 // indirect
 	github.com/filecoin-project/specs-actors/v7 v7.0.0-rc1 // indirect
 	github.com/filecoin-project/specs-storage v0.1.1-0.20211228030229-6d460d25a0c9 // indirect
+	github.com/filecoin-project/storetheindex v0.3.4
 	github.com/flynn/noise v1.0.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
-	github.com/fsnotify/fsnotify v1.4.9 // indirect
+	github.com/fsnotify/fsnotify v1.5.1 // indirect
 	github.com/gbrlsnchs/jwt/v3 v3.0.1 // indirect
 	github.com/gdamore/encoding v1.0.0 // indirect
 	github.com/gdamore/tcell/v2 v2.2.0 // indirect
@@ -133,8 +135,8 @@ require (
 	github.com/ipfs/go-cidutil v0.0.2 // indirect
 	github.com/ipfs/go-ds-badger2 v0.1.2 // indirect
 	github.com/ipfs/go-ds-measure v0.2.0 // indirect
-	github.com/ipfs/go-fs-lock v0.0.6 // indirect
-	github.com/ipfs/go-ipfs-cmds v0.3.0 // indirect
+	github.com/ipfs/go-fs-lock v0.0.7 // indirect
+	github.com/ipfs/go-ipfs-cmds v0.6.0 // indirect
 	github.com/ipfs/go-ipfs-ds-help v1.1.0 // indirect
 	github.com/ipfs/go-ipfs-exchange-interface v0.1.0 // indirect
 	github.com/ipfs/go-ipfs-exchange-offline v0.1.1 // indirect
@@ -148,11 +150,11 @@ require (
 	github.com/ipfs/go-ipns v0.1.2 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
 	github.com/ipfs/go-merkledag v0.5.1 // indirect
-	github.com/ipfs/go-path v0.0.7 // indirect
+	github.com/ipfs/go-path v0.2.1 // indirect
 	github.com/ipfs/go-unixfs v0.3.1 // indirect
 	github.com/ipfs/go-unixfsnode v1.2.0 // indirect
 	github.com/ipfs/go-verifcid v0.0.1 // indirect
-	github.com/ipfs/interface-go-ipfs-core v0.4.0 // indirect
+	github.com/ipfs/interface-go-ipfs-core v0.5.2 // indirect
 	github.com/ipld/go-car v0.3.3 // indirect
 	github.com/ipld/go-car/v2 v2.1.1 // indirect
 	github.com/ipld/go-codec-dagpb v1.3.0 // indirect
@@ -226,7 +228,7 @@ require (
 	github.com/multiformats/go-multiaddr-dns v0.3.1 // indirect
 	github.com/multiformats/go-multiaddr-fmt v0.1.0 // indirect
 	github.com/multiformats/go-multibase v0.0.3 // indirect
-	github.com/multiformats/go-multicodec v0.3.1-0.20211210143421-a526f306ed2c // indirect
+	github.com/multiformats/go-multicodec v0.4.0 // indirect
 	github.com/multiformats/go-multihash v0.1.0 // indirect
 	github.com/multiformats/go-multistream v0.2.2 // indirect
 	github.com/multiformats/go-varint v0.0.6 // indirect
@@ -263,7 +265,7 @@ require (
 	github.com/whyrusleeping/base32 v0.0.0-20170828182744-c30ac30633cc // indirect
 	github.com/whyrusleeping/bencher v0.0.0-20190829221104-bb6607aa8bba // indirect
 	github.com/whyrusleeping/cbor v0.0.0-20171005072247-63513f603b11 // indirect
-	github.com/whyrusleeping/cbor-gen v0.0.0-20210713220151-be142a5ae1a8 // indirect
+	github.com/whyrusleeping/cbor-gen v0.0.0-20211110122933-f57984553008 // indirect
 	github.com/whyrusleeping/go-keyspace v0.0.0-20160322163242-5b898ac5add1 // indirect
 	github.com/whyrusleeping/ledger-filecoin-go v0.9.1-0.20201010031517-c3dcc1bddce4 // indirect
 	github.com/whyrusleeping/multiaddr-filter v0.0.0-20160516205228-e903e4adabd7 // indirect
@@ -277,8 +279,8 @@ require (
 	go.opentelemetry.io/otel v1.3.0 // indirect
 	go.opentelemetry.io/otel/trace v1.3.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
-	go.uber.org/dig v1.10.0 // indirect
-	go.uber.org/fx v1.9.0 // indirect
+	go.uber.org/dig v1.12.0 // indirect
+	go.uber.org/fx v1.15.0 // indirect
 	go.uber.org/multierr v1.7.0 // indirect
 	go.uber.org/zap v1.19.1 // indirect
 	go4.org v0.0.0-20200411211856-f5505b9728dd // indirect

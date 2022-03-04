@@ -10,7 +10,10 @@ import (
 	"github.com/ipfs/go-cid"
 	flatfs "github.com/ipfs/go-ds-flatfs"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	logging "github.com/ipfs/go-log/v2"
 )
+
+var log = logging.Logger("blockstore")
 
 const blockstoreSubdir = "blockstore"
 
@@ -75,17 +78,24 @@ func (mgr *Manager) GetAwait(ctx context.Context, cid cid.Cid, callback func(Blo
 }
 
 func (mgr *Manager) Put(ctx context.Context, block blocks.Block) error {
-
+	log.Debugw("begin save block", "cid", block.Cid())
 	// Make sure we aren't putting while a callback is being registered
 	mgr.waitListLk.Lock()
 	defer mgr.waitListLk.Unlock()
 
+	log.Debugw("inside lock save block", "cid", block.Cid())
+
 	// We do this first since it should catch any errors with block being nil
 	if err := mgr.Blockstore.Put(ctx, block); err != nil {
+		log.Debugw("err save block", "cid", block.Cid(), "error", err)
 		return err
 	}
 
+	log.Debugw("publish callbacks", "cid", block.Cid())
+
 	mgr.notifyWaitCallbacks(block)
+
+	log.Debugw("finish save block", "cid", block.Cid())
 
 	return nil
 }
