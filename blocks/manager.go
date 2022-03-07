@@ -41,11 +41,14 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 	if err != nil {
 		return nil, err
 	}
+	return newManager(blockstore.NewBlockstoreNoPrefix(blockstoreDatastore)), nil
+}
 
+func newManager(bs blockstore.Blockstore) *Manager {
 	return &Manager{
-		Blockstore: blockstore.NewBlockstoreNoPrefix(blockstoreDatastore),
+		Blockstore: bs,
 		waitList:   make(map[cid.Cid][]func(Block)),
-	}, nil
+	}
 }
 
 func (mgr *Manager) GetAwait(ctx context.Context, cid cid.Cid, callback func(Block)) error {
