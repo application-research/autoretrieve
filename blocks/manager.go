@@ -27,8 +27,9 @@ type ManagerConfig struct {
 // events.
 type Manager struct {
 	blockstore.Blockstore
-	waitList   map[cid.Cid][]func(Block)
-	waitListLk sync.Mutex
+	readyBlocks chan Block
+	waitList    map[cid.Cid][]func(Block)
+	waitListLk  sync.Mutex
 }
 
 func NewManager(config ManagerConfig) (*Manager, error) {
@@ -45,10 +46,15 @@ func NewManager(config ManagerConfig) (*Manager, error) {
 }
 
 func newManager(bs blockstore.Blockstore) *Manager {
-	return &Manager{
-		Blockstore: bs,
-		waitList:   make(map[cid.Cid][]func(Block)),
+	mgr := &Manager{
+		Blockstore:  bs,
+		readyBlocks: make(chan Block, 10),
+		waitList:    make(map[cid.Cid][]func(Block)),
 	}
+
+	go mgr.pollNotifyWaitCallbacks()
+
+	return mgr
 }
 
 func (mgr *Manager) GetAwait(ctx context.Context, cid cid.Cid, callback func(Block)) error {
@@ -96,7 +102,11 @@ func (mgr *Manager) Put(ctx context.Context, block blocks.Block) error {
 
 	log.Debugw("publish callbacks", "cid", block.Cid())
 
-	mgr.notifyWaitCallbacks(block)
+	select {
+	case mgr.readyBlocks <- block:
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 
 	log.Debugw("finish save block", "cid", block.Cid())
 
@@ -114,10 +124,20 @@ func (mgr *Manager) PutMany(ctx context.Context, blocks []blocks.Block) error {
 	}
 
 	for _, block := range blocks {
-		mgr.notifyWaitCallbacks(block)
+		select {
+		case mgr.readyBlocks <- block:
+		case <-ctx.Done():
+			return ctx.Err()
+		}
 	}
 
 	return nil
+}
+
+func (mgr *Manager) pollNotifyWaitCallbacks() {
+	for block := range mgr.readyBlocks {
+		mgr.notifyWaitCallbacks(block)
+	}
 }
 
 func (mgr *Manager) notifyWaitCallbacks(block Block) {
