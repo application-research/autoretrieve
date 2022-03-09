@@ -104,7 +104,7 @@ func main() {
 		},
 		&cli.BoolFlag{
 			Name:  "log-retrievals",
-			Usage: "Wehther to present periodic output about the progress of retrievals",
+			Usage: "Whether to present periodic output about the progress of retrievals",
 		},
 		flagWhitelist,
 		flagBlacklist,
@@ -161,7 +161,11 @@ func run(cctx *cli.Context) error {
 	if err := metrics.GoMetricsInjectPrometheus(); err != nil {
 		logger.Warnf("Failed to inject prometheus: %v", err)
 	}
-	metricsInst := metrics.NewPrometheus(cctx.Context, metrics.NewBasic(&metrics.Noop{}, logger))
+
+	metricsInst := metrics.NewMulti(
+		metrics.NewBasic(logger),
+		metrics.NewGoMetrics(cctx.Context),
+	)
 
 	go func() {
 		http.Handle("/metrics", promhttp.Handler())

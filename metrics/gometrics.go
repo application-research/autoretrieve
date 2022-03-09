@@ -5,11 +5,10 @@ import (
 
 	gometrics "github.com/ipfs/go-metrics-interface"
 	gometricsprometheus "github.com/ipfs/go-metrics-prometheus"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
 type GoMetrics struct {
-	Metrics
-
 	activeRetrievals        gometrics.Gauge
 	retrievalSuccesses      gometrics.Counter
 	retrievalFailures       gometrics.Counter
@@ -21,11 +20,10 @@ func GoMetricsInjectPrometheus() error {
 	return gometricsprometheus.Inject()
 }
 
-func NewPrometheus(ctx context.Context, inner Metrics) *GoMetrics {
+func NewGoMetrics(ctx context.Context) *GoMetrics {
 
 	scope := gometrics.CtxScope(ctx, "autoretrieve")
 	metrics := &GoMetrics{
-		Metrics: inner,
 		activeRetrievals: gometrics.
 			NewCtx(scope, "active_retrievals", "active retrieval count").
 			Gauge(),
@@ -51,10 +49,16 @@ func (gometrics *GoMetrics) NewSession() {
 	gometrics.activeRetrievals.Set(0)
 }
 
+func (metrics *GoMetrics) RecordWallet(info WalletInfo) {}
+
+func (metrics *GoMetrics) RecordGetCandidatesResult(info RequestInfo, result GetCandidatesResult) {}
+
+func (metrics *GoMetrics) RecordQuery(info CandidateInfo) {}
+
+func (metrics *GoMetrics) RecordQueryResult(info CandidateInfo, result QueryResult) {}
+
 func (metrics *GoMetrics) RecordRetrieval(info CandidateInfo) {
 	metrics.activeRetrievals.Inc()
-
-	metrics.Metrics.RecordRetrieval(info)
 }
 
 func (metrics *GoMetrics) RecordRetrievalResult(info CandidateInfo, result RetrievalResult) {
@@ -67,6 +71,12 @@ func (metrics *GoMetrics) RecordRetrievalResult(info CandidateInfo, result Retri
 		metrics.retrievalSuccesses.Inc()
 		metrics.averageSuccessDurations.Observe(result.Duration.Seconds())
 	}
-
-	metrics.Metrics.RecordRetrievalResult(info, result)
 }
+
+func (metrics *GoMetrics) RecordMinerConnection(peer peer.ID) {}
+
+func (metrics *GoMetrics) RecordMinerDisconnection(peer peer.ID) {}
+
+func (metrics *GoMetrics) RecordClientConnection(peer peer.ID) {}
+
+func (metrics *GoMetrics) RecordClientDisconnection(peer peer.ID) {}

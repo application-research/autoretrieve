@@ -6,18 +6,16 @@ import (
 	"github.com/dustin/go-humanize"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-log/v2"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 )
 
 type Basic struct {
-	Metrics
-
 	logger log.EventLogger
 }
 
-func NewBasic(inner Metrics, logger log.EventLogger) *Basic {
+func NewBasic(logger log.EventLogger) *Basic {
 	return &Basic{
-		Metrics: inner,
-		logger:  logger,
+		logger: logger,
 	}
 }
 
@@ -87,6 +85,22 @@ func (metrics *Basic) RecordRetrievalResult(info CandidateInfo, result Retrieval
 			result.TotalPayment,
 		)
 	}
+}
+
+func (metrics *Basic) RecordMinerConnection(peer peer.ID) {
+	metrics.logger.Infof("Miner %s connected", peer)
+}
+
+func (metrics *Basic) RecordMinerDisconnection(peer peer.ID) {
+	metrics.logger.Infof("Miner %s disconnected", peer)
+}
+
+func (metrics *Basic) RecordClientConnection(peer peer.ID) {
+	metrics.logger.Infof("Client %s connected", peer)
+}
+
+func (metrics *Basic) RecordClientDisconnection(peer peer.ID) {
+	metrics.logger.Infof("Client %s disconnected", peer)
 }
 
 func formatCidAndRoot(cid cid.Cid, root cid.Cid, short bool) string {

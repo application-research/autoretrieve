@@ -57,30 +57,33 @@ type RequestResult struct {
 }
 
 type Metrics interface {
-	// Called whenever the wallet is set
+	// Whenever the wallet is set
 	RecordWallet(WalletInfo)
 
 	// Called once, after getting candidates
 	RecordGetCandidatesResult(RequestInfo, GetCandidatesResult)
 
-	// Called before each query
+	// Before each query
 	RecordQuery(CandidateInfo)
 
-	// Called after each query is finished
+	// After each query is finished
 	RecordQueryResult(CandidateInfo, QueryResult)
 
-	// Called before each retrieval attempt
+	// Before each retrieval attempt
 	RecordRetrieval(CandidateInfo)
 
-	// Called after each retrieval attempt
+	// After each retrieval attempt
 	RecordRetrievalResult(CandidateInfo, RetrievalResult)
+
+	// When a service provider connects
+	RecordMinerConnection(peer.ID)
+
+	// When a service provider disconnects
+	RecordMinerDisconnection(peer.ID)
+
+	// When a client connects
+	RecordClientConnection(peer.ID)
+
+	// When a client disconnects
+	RecordClientDisconnection(peer.ID)
 }
-
-type Noop struct{}
-
-func (metrics *Noop) RecordWallet(WalletInfo)                                    {}
-func (metrics *Noop) RecordGetCandidatesResult(RequestInfo, GetCandidatesResult) {}
-func (metrics *Noop) RecordQuery(CandidateInfo)                                  {}
-func (metrics *Noop) RecordQueryResult(CandidateInfo, QueryResult)               {}
-func (metrics *Noop) RecordRetrieval(CandidateInfo)                              {}
-func (metrics *Noop) RecordRetrievalResult(CandidateInfo, RetrievalResult)       {}
