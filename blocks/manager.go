@@ -17,7 +17,7 @@ var log = logging.Logger("blockstore")
 
 const blockstoreSubdir = "blockstore"
 
-type Block blocks.Block
+type Block = blocks.Block
 
 type ManagerConfig struct {
 	DataDir string
