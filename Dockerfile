@@ -27,7 +27,7 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 FROM ubuntu:22.04
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
-    apt-get install -y --no-install-recommends jq libhwloc-dev ocl-icd-opencl-dev
+    apt-get install -y --no-install-recommends jq libhwloc-dev ocl-icd-opencl-dev ca-certificates
 WORKDIR /app
 COPY --from=builder /app/autoretrieve autoretrieve
 
