@@ -35,4 +35,11 @@ COPY --from=builder /app/autoretrieve autoretrieve
 VOLUME /app/data
 ENV AUTORETRIEVE_DATA_DIR=/app/data
 
+# Libp2p port
+EXPOSE 6746
+
+# Http(s) ports
+EXPOSE 80
+EXPOSE 443
+
 CMD ["./autoretrieve"]
