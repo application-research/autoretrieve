@@ -20,9 +20,9 @@ type RandomPrunerConfig struct {
 	// cannot be zero
 	Threshold uint64
 
-	// Min bytes to remove during each prune operation - a value higher than
-	// MaxCapacityBytes shall prune all applicable blocks; a value of 0 shall
-	// default to half of MaxCapacityBytes
+	// Min bytes to remove during each prune operation - a value greater than or
+	// equal to MaxCapacityBytes shall prune all applicable blocks; a value of 0
+	// shall default to half of MaxCapacityBytes
 	PruneBytes uint64
 }
 
@@ -38,7 +38,7 @@ type RandomPruner struct {
 
 // The datastore that was used to create the blockstore is a required parameter
 // used for calculating remaining disk space
-func NewPruner(inner blockstore.Blockstore, datastore *flatfs.Datastore, cfg RandomPrunerConfig) *RandomPruner {
+func NewRandomPruner(inner blockstore.Blockstore, datastore *flatfs.Datastore, cfg RandomPrunerConfig) *RandomPruner {
 	if cfg.Threshold == 0 {
 		// Always, immediately fail
 		panic("prune threshold cannot be 0")
@@ -164,12 +164,12 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 	return nil
 }
 
-func (pruner *RandomPruner) Put(ctx context.Context, block Block) {
-	pruner.Blockstore.Put(ctx, block)
+func (pruner *RandomPruner) Put(ctx context.Context, block Block) error {
 	pruner.Poll(ctx)
+	return pruner.Blockstore.Put(ctx, block)
 }
 
-func (pruner *RandomPruner) PutMany(ctx context.Context, blocks []Block) {
-	pruner.Blockstore.PutMany(ctx, blocks)
+func (pruner *RandomPruner) PutMany(ctx context.Context, blocks []Block) error {
 	pruner.Poll(ctx)
+	return pruner.Blockstore.PutMany(ctx, blocks)
 }

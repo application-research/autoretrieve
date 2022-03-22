@@ -26,8 +26,10 @@ import (
 	"github.com/filecoin-project/go-data-transfer/channelmonitor"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	lcli "github.com/filecoin-project/lotus/cli"
+	flatfs "github.com/ipfs/go-ds-flatfs"
 	leveldb "github.com/ipfs/go-ds-leveldb"
 	graphsync "github.com/ipfs/go-graphsync/impl"
+	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -45,6 +47,7 @@ const minerBlacklistFilename = "blacklist.txt"
 const minerWhitelistFilename = "whitelist.txt"
 const datastoreSubdir = "datastore"
 const walletSubdir = "wallet"
+const blockstoreSubdir = "blockstore"
 
 var flagWhitelist = &cli.StringSliceFlag{
 	Name:  "whitelist",
@@ -116,6 +119,11 @@ func main() {
 			Usage:   "Whether to present periodic output about the progress of retrievals",
 			EnvVars: []string{"AUTORETRIEVE_LOG_RETRIEVALS"},
 		},
+		&cli.Uint64Flag{
+			Name:    "prune-threshold",
+			Usage:   "Threshold in bytes at which the blockstore pruner will initiate a prune operation",
+			EnvVars: []string{"AUTORETRIEVE_PRUNE_THRESHOLD"},
+		},
 		flagWhitelist,
 		flagBlacklist,
 	}
@@ -167,6 +175,7 @@ func run(cctx *cli.Context) error {
 	timeout := cctx.Duration("timeout")
 	maxSendWorkers := cctx.Uint("max-send-workers")
 	perMinerRetrievalLimit := cctx.Uint("per-miner-retrieval-limit")
+	pruneThreshold := cctx.Uint64("prune-threshold")
 
 	if err := metrics.GoMetricsInjectPrometheus(); err != nil {
 		logger.Warnf("Failed to inject prometheus: %v", err)
@@ -228,9 +237,21 @@ func run(cctx *cli.Context) error {
 	defer closer()
 
 	// Initialize blockstore manager
-	blockManager, err := blocks.NewManager(blocks.ManagerConfig{
-		DataDir: dataDir,
+	parseShardFunc, err := flatfs.ParseShardFunc("/repo/flatfs/shard/v1/next-to-last/3")
+	if err != nil {
+		return err
+	}
+
+	blockstoreDatastore, err := flatfs.CreateOrOpen(filepath.Join(dataDir, blockstoreSubdir), parseShardFunc, false)
+	if err != nil {
+		return err
+	}
+
+	blockstore := blockstore.NewBlockstoreNoPrefix(blockstoreDatastore)
+	pruner := blocks.NewRandomPruner(blockstore, blockstoreDatastore, blocks.RandomPrunerConfig{
+		Threshold: pruneThreshold,
 	})
+	blockManager := blocks.NewManager(pruner)
 	if err != nil {
 		return err
 	}
