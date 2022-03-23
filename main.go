@@ -41,18 +41,18 @@ import (
 
 var logger = log.Logger("autoretrieve")
 
-const minerBlacklistFilename = "blacklist.txt"
-const minerWhitelistFilename = "whitelist.txt"
+const minerBlacklistFilename = "miner-blacklist.txt"
+const minerWhitelistFilename = "miner-whitelist.txt"
 const datastoreSubdir = "datastore"
 const walletSubdir = "wallet"
 
-var flagWhitelist = &cli.StringSliceFlag{
-	Name:  "whitelist",
-	Usage: "Which miners to whitelist - overrides whitelist.txt",
+var flagMinerWhitelist = &cli.StringSliceFlag{
+	Name:  "miner-whitelist",
+	Usage: "Which miners to whitelist - overrides miner-whitelist.txt",
 }
-var flagBlacklist = &cli.StringSliceFlag{
-	Name:  "blacklist",
-	Usage: "Which miners to blacklist - overrides blacklist.txt",
+var flagMinerBlacklist = &cli.StringSliceFlag{
+	Name:  "miner-blacklist",
+	Usage: "Which miners to blacklist - overrides miner-blacklist.txt",
 }
 
 func main() {
@@ -116,22 +116,22 @@ func main() {
 			Usage:   "Whether to present periodic output about the progress of retrievals",
 			EnvVars: []string{"AUTORETRIEVE_LOG_RETRIEVALS"},
 		},
-		flagWhitelist,
-		flagBlacklist,
+		flagMinerWhitelist,
+		flagMinerBlacklist,
 	}
 
 	app.Action = run
 
 	app.Commands = []*cli.Command{
 		{
-			Name:   "check-blacklist",
-			Action: cmdCheckBlacklist,
-			Flags:  []cli.Flag{flagBlacklist},
+			Name:   "check-miner-blacklist",
+			Action: cmdCheckMinerBlacklist,
+			Flags:  []cli.Flag{flagMinerBlacklist},
 		},
 		{
-			Name:   "check-whitelist",
-			Action: cmdCheckWhitelist,
-			Flags:  []cli.Flag{flagWhitelist},
+			Name:   "check-miner-whitelist",
+			Action: cmdCheckMinerWhitelist,
+			Flags:  []cli.Flag{flagMinerWhitelist},
 		},
 	}
 
@@ -204,12 +204,12 @@ func run(cctx *cli.Context) error {
 	}()
 
 	// Load miner blacklist and whitelist
-	minerBlacklist, err := getBlacklist(cctx)
+	minerBlacklist, err := getMinerBlacklist(cctx)
 	if err != nil {
 		return err
 	}
 
-	minerWhitelist, err := getWhitelist(cctx)
+	minerWhitelist, err := getMinerWhitelist(cctx)
 	if err != nil {
 		return err
 	}
@@ -401,8 +401,8 @@ func run(cctx *cli.Context) error {
 var dtHeaders = "peer\tcid\tstatus\ttransferred\tmessage"
 var dtOutput = "%s\t%s\t%s\t%d\t%s\n"
 
-func cmdCheckBlacklist(cctx *cli.Context) error {
-	minerBlacklist, err := getBlacklist(cctx)
+func cmdCheckMinerBlacklist(cctx *cli.Context) error {
+	minerBlacklist, err := getMinerBlacklist(cctx)
 	if err != nil {
 		return err
 	}
@@ -419,8 +419,8 @@ func cmdCheckBlacklist(cctx *cli.Context) error {
 	return nil
 }
 
-func cmdCheckWhitelist(cctx *cli.Context) error {
-	minerWhitelist, err := getWhitelist(cctx)
+func cmdCheckMinerWhitelist(cctx *cli.Context) error {
+	minerWhitelist, err := getMinerWhitelist(cctx)
 	if err != nil {
 		return err
 	}
@@ -574,7 +574,7 @@ func parseMinerListArg(cctx *cli.Context, flagName string) (map[address.Address]
 }
 
 // Attempts to load the passed cli flag first - if empty, loads the file instead
-func getList(cctx *cli.Context, flagName string, path string) (map[address.Address]bool, error) {
+func getMinerList(cctx *cli.Context, flagName string, path string) (map[address.Address]bool, error) {
 	argList, err := parseMinerListArg(cctx, flagName)
 	if err != nil {
 		return nil, err
@@ -587,12 +587,12 @@ func getList(cctx *cli.Context, flagName string, path string) (map[address.Addre
 	return readMinerListFile(path)
 }
 
-func getWhitelist(cctx *cli.Context) (map[address.Address]bool, error) {
-	return getList(cctx, "whitelist", filepath.Join(cctx.String("datadir"), minerWhitelistFilename))
+func getMinerWhitelist(cctx *cli.Context) (map[address.Address]bool, error) {
+	return getMinerList(cctx, "miner-whitelist", filepath.Join(cctx.String("datadir"), minerWhitelistFilename))
 }
 
-func getBlacklist(cctx *cli.Context) (map[address.Address]bool, error) {
-	return getList(cctx, "blacklist", filepath.Join(cctx.String("datadir"), minerBlacklistFilename))
+func getMinerBlacklist(cctx *cli.Context) (map[address.Address]bool, error) {
+	return getMinerList(cctx, "miner-blacklist", filepath.Join(cctx.String("datadir"), minerBlacklistFilename))
 }
 
 func toMinerPeerList(ctx context.Context, fc *filclient.FilClient, minerList map[address.Address]bool) (map[peer.ID]bool, error) {
