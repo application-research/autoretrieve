@@ -26,6 +26,7 @@ import (
 	"github.com/filecoin-project/go-data-transfer/channelmonitor"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	lcli "github.com/filecoin-project/lotus/cli"
+	"github.com/ipfs/go-cid"
 	leveldb "github.com/ipfs/go-ds-leveldb"
 	graphsync "github.com/ipfs/go-graphsync/impl"
 	"github.com/ipfs/go-log/v2"
@@ -43,6 +44,7 @@ var logger = log.Logger("autoretrieve")
 
 const minerBlacklistFilename = "miner-blacklist.txt"
 const minerWhitelistFilename = "miner-whitelist.txt"
+const cidBlacklistFilename = "cid-blacklist.txt"
 const datastoreSubdir = "datastore"
 const walletSubdir = "wallet"
 
@@ -53,6 +55,10 @@ var flagMinerWhitelist = &cli.StringSliceFlag{
 var flagMinerBlacklist = &cli.StringSliceFlag{
 	Name:  "miner-blacklist",
 	Usage: "Which miners to blacklist - overrides miner-blacklist.txt",
+}
+var flagCIDBlacklist = &cli.StringSliceFlag{
+	Name:  "cid-blacklist",
+	Usage: "Which CIDs to blacklist - overrides cid-blacklist.txt",
 }
 
 func main() {
@@ -118,6 +124,7 @@ func main() {
 		},
 		flagMinerWhitelist,
 		flagMinerBlacklist,
+		flagCIDBlacklist,
 	}
 
 	app.Action = run
@@ -132,6 +139,11 @@ func main() {
 			Name:   "check-miner-whitelist",
 			Action: cmdCheckMinerWhitelist,
 			Flags:  []cli.Flag{flagMinerWhitelist},
+		},
+		{
+			Name:   "check-cid-blacklist",
+			Action: cmdCheckCIDBlacklist,
+			Flags:  []cli.Flag{flagCIDBlacklist},
 		},
 	}
 
@@ -210,6 +222,12 @@ func run(cctx *cli.Context) error {
 	}
 
 	minerWhitelist, err := getMinerWhitelist(cctx)
+	if err != nil {
+		return err
+	}
+
+	// Load CID blacklist
+	cidBlacklist, err := getCIDBlacklist(cctx)
 	if err != nil {
 		return err
 	}
@@ -379,6 +397,7 @@ func run(cctx *cli.Context) error {
 	_, err = bitswap.NewProvider(
 		cctx.Context,
 		bitswap.ProviderConfig{
+			CIDBlacklist:   cidBlacklist,
 			MaxSendWorkers: uint(maxSendWorkers),
 			UseFullRT:      cctx.Bool("fullrt"),
 		},
@@ -432,6 +451,24 @@ func cmdCheckMinerWhitelist(cctx *cli.Context) error {
 
 	for miner := range minerWhitelist {
 		fmt.Printf("%s\n", miner)
+	}
+
+	return nil
+}
+
+func cmdCheckCIDBlacklist(cctx *cli.Context) error {
+	cidBlacklist, err := getCIDBlacklist(cctx)
+	if err != nil {
+		return err
+	}
+
+	if len(cidBlacklist) == 0 {
+		fmt.Printf("No blacklisted CIDs were found\n")
+		return nil
+	}
+
+	for cid := range cidBlacklist {
+		fmt.Printf("%s\n", cid)
 	}
 
 	return nil
@@ -595,6 +632,62 @@ func getMinerBlacklist(cctx *cli.Context) (map[address.Address]bool, error) {
 	return getMinerList(cctx, "miner-blacklist", filepath.Join(cctx.String("datadir"), minerBlacklistFilename))
 }
 
+func getCIDBlacklist(cctx *cli.Context) (map[cid.Cid]bool, error) {
+	// First try to use any CIDs passed as an argument
+	cidStringsRaw := cctx.StringSlice("cid-blacklist")
+
+	var cidStrings []string
+	for _, raw := range cidStringsRaw {
+		cidStrings = append(cidStrings, strings.Split(raw, ",")...)
+	}
+
+	cids := make(map[cid.Cid]bool)
+	for _, cidStr := range cidStrings {
+		cid, err := cid.Decode(cidStr)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse blacklisted CID %s: %w", cidStr, err)
+		}
+
+		cids[cid] = true
+	}
+
+	// If any CIDs were passed as an argument, prefer those over the cids in the file
+	if len(cids) != 0 {
+		return cids, nil
+	}
+
+	// No CIDs were passed, try using CIDs in file
+	path := filepath.Join(cctx.String("datadir"), cidBlacklistFilename)
+	strs, err := readListFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("could not read CID blacklist file: %w", err)
+	}
+
+	var blacklistArr []cid.Cid
+	for lineNum, str := range strs {
+		str = strings.TrimSpace(strings.Split(str, "#")[0])
+
+		if str == "" {
+			continue
+		}
+
+		cid, err := cid.Decode(str)
+		if err != nil {
+			logger.Warnf("Skipping unparseable entry \"%v\" in CID blacklist at line %v: %v", str, lineNum, err)
+			continue
+		}
+
+		blacklistArr = append(blacklistArr, cid)
+	}
+
+	blacklist := make(map[cid.Cid]bool)
+	for _, cid := range blacklistArr {
+		blacklist[cid] = true
+	}
+
+	return blacklist, nil
+}
+
 func toMinerPeerList(ctx context.Context, fc *filclient.FilClient, minerList map[address.Address]bool) (map[peer.ID]bool, error) {
 	minerPeerList := make(map[peer.ID]bool, len(minerList))
 	for maddr, status := range minerList {
@@ -605,4 +698,18 @@ func toMinerPeerList(ctx context.Context, fc *filclient.FilClient, minerList map
 		minerPeerList[minerPeer.ID] = status
 	}
 	return minerPeerList, nil
+}
+
+func readListFile(path string) ([]string, error) {
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+
+		return nil, err
+	}
+
+	strs := strings.Split(string(bytes), "\n")
+	return strs, nil
 }
