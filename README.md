@@ -24,11 +24,11 @@ setting `AUTORETRIEVE_DATA_DIR`.
 You can use CLI flags or config files to blacklist or whitelist miners for
 autoretrieve downloads.
 
-To use CLI flags `--whitelist f0xxxx,f0yyyy` and `--blacklist f0zzzz,f0wwww`. If
+To use CLI flags `--miner-whitelist f0xxxx,f0yyyy` and `--miner-blacklist f0zzzz,f0wwww`. If
 set, the CLI flags will take precedence over config files.
 
-For a persistent blacklist or whitelist, create `blacklist.txt` and/or
-`whitelist.txt` in the data directory (`your-datadir` in the example above),
+For a persistent blacklist or whitelist, create `miner-blacklist.txt` and/or
+`miner-whitelist.txt` in the data directory (`your-datadir` in the example above),
 respectively, and populate them with a newline-separated listed of miner strings
 (text after `#` will be ignored):
 ```sh
@@ -49,8 +49,8 @@ USAGE:
    autoretrieve [global options] command [command options] [arguments...]
 
 COMMANDS:
-   check-blacklist  
-   check-whitelist  
+   check-miner-blacklist
+   check-miner-whitelist
    help, h          Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
@@ -64,7 +64,7 @@ GLOBAL OPTIONS:
    --fullrt                           Whether to use the full routing table instead of DHT (default: false) [$AUTORETRIEVE_USE_FULLRT]
    --log-resource-manager             Whether to present output about the current state of the libp2p resource manager (default: false) [$AUTORETRIEVE_LOG_RESOURCE_MANAGER]
    --log-retrievals                   Whether to present periodic output about the progress of retrievals (default: false) [$AUTORETRIEVE_LOG_RETRIEVALS]
-   --whitelist value                  Which miners to whitelist - overrides whitelist.txt
-   --blacklist value                  Which miners to blacklist - overrides blacklist.txt
+   --miner-whitelist value            Which miners to whitelist - overrides miner-whitelist.txt
+   --miner-blacklist value            Which miners to blacklist - overrides miner-blacklist.txt
    --help, -h                         show help (default: false)
 ```
