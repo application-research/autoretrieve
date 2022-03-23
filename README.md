@@ -66,5 +66,6 @@ GLOBAL OPTIONS:
    --log-retrievals                   Whether to present periodic output about the progress of retrievals (default: false) [$AUTORETRIEVE_LOG_RETRIEVALS]
    --miner-whitelist value            Which miners to whitelist - overrides miner-whitelist.txt
    --miner-blacklist value            Which miners to blacklist - overrides miner-blacklist.txt
+   --cid-blacklist value              Which CIDs to blacklist - overrides cid-blacklist.txt
    --help, -h                         show help (default: false)
 ```

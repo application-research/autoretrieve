@@ -39,6 +39,7 @@ const (
 const targetMessageSize = 16384
 
 type ProviderConfig struct {
+	CIDBlacklist   map[cid.Cid]bool
 	MaxSendWorkers uint
 	UseFullRT      bool
 }
@@ -159,6 +160,18 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 		// Only respond to WANT_HAVE and WANT_BLOCK
 		if entry.WantType != wantTypeHave && entry.WantType != wantTypeBlock {
 			logger.Debugf("Other message type: %s - peer %s", entry.WantType.String(), sender)
+			continue
+		}
+
+		// We want to skip CIDs in the blacklist, send DONT_HAVE
+		if provider.config.CIDBlacklist[entry.Cid] {
+			logger.Debugf("Replying DONT_HAVE for blacklisted CID: %s", entry.Cid)
+			provider.taskQueue.PushTasks(sender, peertask.Task{
+				Topic:    topicSendDontHave,
+				Priority: 0,
+				Work:     entry.Cid.ByteLen(),
+				Data:     entry.Cid,
+			})
 			continue
 		}
 
