@@ -27,12 +27,19 @@ RUN --mount=type=cache,target=/root/.cache/go-build \
 FROM ubuntu:22.04
 RUN --mount=type=cache,target=/var/cache/apt \
     apt-get update && \
-    apt-get install -y --no-install-recommends jq libhwloc-dev ocl-icd-opencl-dev
+    apt-get install -y --no-install-recommends jq libhwloc-dev ocl-icd-opencl-dev ca-certificates
 WORKDIR /app
 COPY --from=builder /app/autoretrieve autoretrieve
 
 # Create the /app/data volume for the autoretrieve data directory
 VOLUME /app/data
 ENV AUTORETRIEVE_DATA_DIR=/app/data
+
+# Libp2p port
+EXPOSE 6746
+
+# Http(s) ports
+EXPOSE 80
+EXPOSE 443
 
 CMD ["./autoretrieve"]
