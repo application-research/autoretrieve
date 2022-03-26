@@ -27,7 +27,7 @@ type RandomPrunerConfig struct {
 	PruneBytes uint64
 
 	// How long a block should remain pinned after it is used, before it is
-	// considered for pruning
+	// considered for pruning; defaults to one day
 	PinDuration time.Duration
 }
 
@@ -63,6 +63,10 @@ func NewRandomPruner(inner blockstore.Blockstore, datastore *flatfs.Datastore, c
 
 	if cfg.Threshold > cfg.PruneBytes {
 		cfg.PruneBytes = cfg.Threshold
+	}
+
+	if cfg.PinDuration == 0 {
+		cfg.PinDuration = time.Hour * 24
 	}
 
 	return &RandomPruner{
