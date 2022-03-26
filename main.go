@@ -130,8 +130,6 @@ func main() {
 			Usage:   "Threshold in bytes at which the blockstore pruner will initiate a prune operation",
 			EnvVars: []string{"AUTORETRIEVE_PRUNE_THRESHOLD"},
 		},
-		flagWhitelist,
-		flagBlacklist,
 		flagMinerWhitelist,
 		flagMinerBlacklist,
 		flagCIDBlacklist,
