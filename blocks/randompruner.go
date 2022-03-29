@@ -35,10 +35,12 @@ type RandomPrunerConfig struct {
 // space is exhausted
 type RandomPruner struct {
 	blockstore.Blockstore
-	datastore   *flatfs.Datastore
-	threshold   uint64
-	pruneBytes  uint64
-	pinDuration time.Duration
+	datastore      *flatfs.Datastore
+	threshold      uint64
+	pruneBytes     uint64
+	pinDuration    time.Duration
+	size           uint64
+	lastSizeUpdate time.Time
 
 	// A list of "hot" CIDs which should not be deleted, and when they were last
 	// used
@@ -76,30 +78,73 @@ func NewRandomPruner(inner blockstore.Blockstore, datastore *flatfs.Datastore, c
 	}
 }
 
+func (pruner *RandomPruner) DeleteBlock(ctx context.Context, cid cid.Cid) error {
+	blockSize, err := pruner.Blockstore.GetSize(ctx, cid)
+	if err != nil {
+		return err
+	}
+
+	if err := pruner.Blockstore.DeleteBlock(ctx, cid); err != nil {
+		return err
+	}
+
+	pruner.size -= uint64(blockSize)
+
+	return nil
+}
+
 func (pruner *RandomPruner) Put(ctx context.Context, block Block) error {
 	pruner.updatePin(block.Cid())
 	pruner.Poll(ctx)
-	return pruner.Blockstore.Put(ctx, block)
+	if err := pruner.Blockstore.Put(ctx, block); err != nil {
+		return err
+	}
+
+	pruner.size += uint64(len(block.RawData()))
+
+	return nil
 }
 
 func (pruner *RandomPruner) PutMany(ctx context.Context, blocks []Block) error {
+	blocksSize := 0
 	for _, block := range blocks {
 		pruner.updatePin(block.Cid())
+		blocksSize += len(block.RawData())
 	}
 	pruner.Poll(ctx)
-	return pruner.Blockstore.PutMany(ctx, blocks)
+	if err := pruner.Blockstore.PutMany(ctx, blocks); err != nil {
+		return err
+	}
+
+	pruner.size += uint64(blocksSize)
+
+	return nil
 }
 
 // Checks remaining blockstore capacity and prunes if maximum capacity is hit
 func (pruner *RandomPruner) Poll(ctx context.Context) {
 	pruner.cleanPins(ctx)
 
-	size, err := pruner.datastore.DiskUsage(ctx)
-	if err != nil {
-		log.Errorf("Failed to poll random pruner: could not get disk usage: %v", err)
+	if time.Since(pruner.lastSizeUpdate) > time.Minute {
+		size, err := pruner.datastore.DiskUsage(ctx)
+		if err != nil {
+			log.Errorf("Pruner could not get blockstore disk usage: %v", err)
+		}
+
+		var diff uint64
+		if size > pruner.size {
+			diff = size - pruner.size
+		} else {
+			diff = pruner.size - size
+		}
+		if diff > 1<<30 {
+			log.Warnf("Large mismatch between pruner's tracked size (%v) and datastore's reported disk usage (%v)", pruner.size, size)
+		}
+
+		pruner.size = size
 	}
 
-	if size >= pruner.threshold {
+	if pruner.size >= pruner.threshold {
 		go func() {
 			if err := pruner.prune(ctx, pruner.threshold*pruner.pruneBytes); err != nil {
 				log.Errorf("Random pruner failed to prune: %v", err)
