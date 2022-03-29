@@ -157,7 +157,7 @@ func main() {
 
 	ctx := contextWithInterruptCancel()
 	if err := app.RunContext(ctx, os.Args); err != nil {
-		logger.Fatalf("%w", err)
+		logger.Fatalf("%v", err)
 	}
 }
 
