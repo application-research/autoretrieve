@@ -52,9 +52,7 @@ type RandomPruner struct {
 // does not provide this information
 func NewRandomPruner(inner blockstore.Blockstore, datastore *flatfs.Datastore, cfg RandomPrunerConfig) *RandomPruner {
 	if cfg.Threshold == 0 {
-		// Always, immediately fail for this config mistake - should there be a
-		// default?
-		log.Warnf("prune threshold is zero - this could potentially be a performance concern")
+		log.Warnf("zero is not a valid prune threshold - do not initialize RandomPruner when it is not intended to be used")
 	}
 
 	if cfg.PruneBytes == 0 {
