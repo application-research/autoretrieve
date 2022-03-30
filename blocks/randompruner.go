@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dustin/go-humanize"
 	"github.com/ipfs/go-cid"
 	flatfs "github.com/ipfs/go-ds-flatfs"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
@@ -146,10 +147,17 @@ func (pruner *RandomPruner) Poll(ctx context.Context) {
 
 	if pruner.size >= pruner.threshold {
 		go func() {
+			log.Infof("Starting prune operation with original datastore size of %s", humanize.IBytes(pruner.size))
+			start := time.Now()
+
 			if err := pruner.prune(ctx, pruner.threshold*pruner.pruneBytes); err != nil {
-				log.Errorf("Random pruner failed to prune: %v", err)
+				log.Errorf("Random pruner errored during prune: %v", err)
 			}
+
+			duration := time.Since(start)
+			log.Infof("Prune operation finished after %s with new datastore size of %s", duration, humanize.IBytes(pruner.size))
 		}()
+
 	}
 }
 
