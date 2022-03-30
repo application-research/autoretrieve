@@ -44,9 +44,10 @@ type RandomPruner struct {
 
 	// A list of "hot" CIDs which should not be deleted, and when they were last
 	// used
-	pins map[cid.Cid]time.Time
+	pins   map[cid.Cid]time.Time
+	pinsLk sync.Mutex
 
-	lk sync.Mutex
+	pruneLk sync.Mutex
 }
 
 // The datastore that was used to create the blockstore is a required parameter
@@ -156,9 +157,9 @@ func (pruner *RandomPruner) Poll(ctx context.Context) {
 	}
 
 	if pruner.size >= pruner.threshold {
-		if pruner.lk.TryLock() {
+		if pruner.pruneLk.TryLock() {
 			go func() {
-				defer pruner.lk.Unlock()
+				defer pruner.pruneLk.Unlock()
 
 				log.Infof("Starting prune operation with original datastore size of %s", humanize.IBytes(pruner.size))
 				start := time.Now()
@@ -267,11 +268,16 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 }
 
 func (pruner *RandomPruner) updatePin(cid cid.Cid) {
+	pruner.pinsLk.Lock()
 	pruner.pins[cid] = time.Now()
+	pruner.pinsLk.Unlock()
 }
 
 // Remove pins that have passed the pin duration
 func (pruner *RandomPruner) cleanPins(ctx context.Context) error {
+	pruner.pinsLk.Lock()
+	defer pruner.pinsLk.Unlock()
+
 	now := time.Now()
 
 	for cid, lastUse := range pruner.pins {
@@ -288,6 +294,9 @@ func (pruner *RandomPruner) cleanPins(ctx context.Context) error {
 }
 
 func (pruner *RandomPruner) isPinned(cid cid.Cid) bool {
+	pruner.pinsLk.Lock()
+	defer pruner.pinsLk.Unlock()
+
 	lastUse, ok := pruner.pins[cid]
 	if !ok {
 		return false
