@@ -1,6 +1,6 @@
 module github.com/application-research/autoretrieve
 
-go 1.17
+go 1.18
 
 require (
 	github.com/application-research/filclient v0.0.0-20220304150921-3d7237f66cd1
