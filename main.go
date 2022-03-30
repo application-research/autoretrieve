@@ -269,9 +269,13 @@ func run(cctx *cli.Context) error {
 
 	// Only wrap blockstore with pruner when a prune threshold is specified
 	if pruneThreshold != 0 {
-		blockstore = blocks.NewRandomPruner(blockstore, blockstoreDatastore, blocks.RandomPrunerConfig{
+		blockstore, err = blocks.NewRandomPruner(cctx.Context, blockstore, blockstoreDatastore, blocks.RandomPrunerConfig{
 			Threshold: pruneThreshold,
 		})
+
+		if err != nil {
+			return err
+		}
 	}
 
 	blockManager := blocks.NewManager(blockstore)

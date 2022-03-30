@@ -53,7 +53,12 @@ type RandomPruner struct {
 // The datastore that was used to create the blockstore is a required parameter
 // used for calculating remaining disk space - the Blockstore interface itself
 // does not provide this information
-func NewRandomPruner(inner blockstore.Blockstore, datastore *flatfs.Datastore, cfg RandomPrunerConfig) *RandomPruner {
+func NewRandomPruner(
+	ctx context.Context,
+	inner blockstore.Blockstore,
+	datastore *flatfs.Datastore,
+	cfg RandomPrunerConfig,
+) (*RandomPruner, error) {
 	if cfg.Threshold == 0 {
 		log.Warnf("zero is not a valid prune threshold - do not initialize RandomPruner when it is not intended to be used")
 	}
@@ -70,13 +75,20 @@ func NewRandomPruner(inner blockstore.Blockstore, datastore *flatfs.Datastore, c
 		cfg.PinDuration = time.Hour * 24
 	}
 
+	size, err := datastore.DiskUsage(ctx)
+
+	if err != nil {
+		return nil, err
+	}
+
 	return &RandomPruner{
 		Blockstore:  inner,
 		datastore:   datastore,
 		threshold:   cfg.Threshold,
 		pruneBytes:  cfg.PruneBytes,
 		pinDuration: cfg.PinDuration,
-	}
+		size:        size,
+	}, nil
 }
 
 func (pruner *RandomPruner) DeleteBlock(ctx context.Context, cid cid.Cid) error {
