@@ -263,6 +263,7 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 
 		// Return reader to start
 		tmpFile.Seek(0, io.SeekStart)
+		reader.Reset(tmpFile)
 	}
 
 	return nil
