@@ -213,6 +213,8 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 		cidCount++
 	}
 
+	tmpFile.Seek(0, io.SeekStart)
+
 	// Choose random blocks and remove them until the requested amount of bytes
 	// have been pruned
 	bytesPruned := uint64(0)
@@ -230,7 +232,7 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 		scanner := bufio.NewScanner(tmpFile)
 		for i := 0; i < cidIndex; i++ {
 			if !scanner.Scan() {
-				return fmt.Errorf("failed to read cid from tmp file (cid index %v / %v, got to i %v): %w", cidIndex, cidCount, i, scanner.Err())
+				return fmt.Errorf("failed to read cid from tmp file (cid index %v / %v, got to i %v): %v", cidIndex, cidCount, i, scanner.Err())
 			}
 		}
 		cidStr := scanner.Text()
