@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"io"
 	"math/rand"
 	"os"
 	"path"
@@ -261,7 +262,7 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 		notFoundCount = 0
 
 		// Return reader to start
-		reader.Reset(tmpFile)
+		tmpFile.Seek(0, io.SeekStart)
 	}
 
 	return nil
