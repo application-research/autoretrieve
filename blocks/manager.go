@@ -3,25 +3,17 @@ package blocks
 import (
 	"context"
 	"errors"
-	"path/filepath"
 	"sync"
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
-	flatfs "github.com/ipfs/go-ds-flatfs"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	logging "github.com/ipfs/go-log/v2"
 )
 
 var log = logging.Logger("blockstore")
 
-const blockstoreSubdir = "blockstore"
-
-type Block blocks.Block
-
-type ManagerConfig struct {
-	DataDir string
-}
+type Block = blocks.Block
 
 // Manager is a blockstore with thread safe notification hooking for put
 // events.
@@ -32,22 +24,9 @@ type Manager struct {
 	waitListLk  sync.Mutex
 }
 
-func NewManager(config ManagerConfig) (*Manager, error) {
-	parseShardFunc, err := flatfs.ParseShardFunc("/repo/flatfs/shard/v1/next-to-last/3")
-	if err != nil {
-		return nil, err
-	}
-
-	blockstoreDatastore, err := flatfs.CreateOrOpen(filepath.Join(config.DataDir, blockstoreSubdir), parseShardFunc, false)
-	if err != nil {
-		return nil, err
-	}
-	return newManager(blockstore.NewBlockstoreNoPrefix(blockstoreDatastore)), nil
-}
-
-func newManager(bs blockstore.Blockstore) *Manager {
+func NewManager(inner blockstore.Blockstore) *Manager {
 	mgr := &Manager{
-		Blockstore:  bs,
+		Blockstore:  inner,
 		readyBlocks: make(chan Block, 10),
 		waitList:    make(map[cid.Cid][]func(Block)),
 	}

@@ -27,8 +27,10 @@ import (
 	"github.com/filecoin-project/lotus/chain/wallet"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/ipfs/go-cid"
+	flatfs "github.com/ipfs/go-ds-flatfs"
 	leveldb "github.com/ipfs/go-ds-leveldb"
 	graphsync "github.com/ipfs/go-graphsync/impl"
+	blockstore "github.com/ipfs/go-ipfs-blockstore"
 	"github.com/ipfs/go-log/v2"
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-core/crypto"
@@ -47,6 +49,7 @@ const minerWhitelistFilename = "miner-whitelist.txt"
 const cidBlacklistFilename = "cid-blacklist.txt"
 const datastoreSubdir = "datastore"
 const walletSubdir = "wallet"
+const blockstoreSubdir = "blockstore"
 
 var flagMinerWhitelist = &cli.StringSliceFlag{
 	Name:  "miner-whitelist",
@@ -122,6 +125,17 @@ func main() {
 			Usage:   "Whether to present periodic output about the progress of retrievals",
 			EnvVars: []string{"AUTORETRIEVE_LOG_RETRIEVALS"},
 		},
+		&cli.Uint64Flag{
+			Name:    "prune-threshold",
+			Usage:   "Threshold in bytes at which the blockstore pruner will initiate a prune operation",
+			EnvVars: []string{"AUTORETRIEVE_PRUNE_THRESHOLD"},
+		},
+		&cli.DurationFlag{
+			Name:    "pin-duration",
+			Usage:   "How long actively requested blocks should be prevented from being pruned",
+			EnvVars: []string{"AUTORETRIEVE_PRUNE_THRESHOLD"},
+			Value:   time.Hour * 6,
+		},
 		flagMinerWhitelist,
 		flagMinerBlacklist,
 		flagCIDBlacklist,
@@ -149,7 +163,7 @@ func main() {
 
 	ctx := contextWithInterruptCancel()
 	if err := app.RunContext(ctx, os.Args); err != nil {
-		logger.Fatalf("%w", err)
+		logger.Fatalf("%v", err)
 	}
 }
 
@@ -179,6 +193,8 @@ func run(cctx *cli.Context) error {
 	timeout := cctx.Duration("timeout")
 	maxSendWorkers := cctx.Uint("max-send-workers")
 	perMinerRetrievalLimit := cctx.Uint("per-miner-retrieval-limit")
+	pruneThreshold := cctx.Uint64("prune-threshold")
+	pinDuration := cctx.Duration("pin-duration")
 
 	if err := metrics.GoMetricsInjectPrometheus(); err != nil {
 		logger.Warnf("Failed to inject prometheus: %v", err)
@@ -246,9 +262,33 @@ func run(cctx *cli.Context) error {
 	defer closer()
 
 	// Initialize blockstore manager
-	blockManager, err := blocks.NewManager(blocks.ManagerConfig{
-		DataDir: dataDir,
-	})
+	parseShardFunc, err := flatfs.ParseShardFunc("/repo/flatfs/shard/v1/next-to-last/3")
+	if err != nil {
+		return err
+	}
+
+	blockstoreDatastore, err := flatfs.CreateOrOpen(filepath.Join(dataDir, blockstoreSubdir), parseShardFunc, false)
+	if err != nil {
+		return err
+	}
+
+	blockstore := blockstore.NewBlockstoreNoPrefix(blockstoreDatastore)
+
+	// Only wrap blockstore with pruner when a prune threshold is specified
+	if pruneThreshold != 0 {
+		blockstore, err = blocks.NewRandomPruner(cctx.Context, blockstore, blockstoreDatastore, blocks.RandomPrunerConfig{
+			Threshold:   pruneThreshold,
+			PinDuration: pinDuration,
+		})
+
+		if err != nil {
+			return err
+		}
+	} else {
+		logger.Warnf("No prune threshold provided, blockstore garbage collection will not be performed")
+	}
+
+	blockManager := blocks.NewManager(blockstore)
 	if err != nil {
 		return err
 	}
