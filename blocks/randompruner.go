@@ -164,15 +164,9 @@ func (pruner *RandomPruner) Poll(ctx context.Context) {
 			go func() {
 				defer pruner.pruneLk.Unlock()
 
-				log.Infof("Starting prune operation with original datastore size of %s", humanize.IBytes(pruner.size))
-				start := time.Now()
-
 				if err := pruner.prune(ctx, pruner.threshold*pruner.pruneBytes); err != nil {
 					log.Errorf("Random pruner errored during prune: %v", err)
 				}
-
-				duration := time.Since(start)
-				log.Infof("Prune operation finished after %s with new datastore size of %s", duration, humanize.IBytes(pruner.size))
 			}()
 		}
 	}
@@ -182,6 +176,10 @@ func (pruner *RandomPruner) Poll(ctx context.Context) {
 //
 // TODO: definitely want to add a span here
 func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) error {
+
+	log.Infof("Starting prune operation with original datastore size of %s", humanize.IBytes(pruner.size))
+	start := time.Now()
+
 	// Get all the keys in the blockstore
 	allCids, err := pruner.AllKeysChan(ctx)
 	if err != nil {
@@ -212,8 +210,7 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 		}
 		cidCount++
 	}
-
-	tmpFile.Seek(0, io.SeekStart)
+	writer.Flush()
 
 	// Choose random blocks and remove them until the requested amount of bytes
 	// have been pruned
@@ -222,9 +219,20 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 	// blocks appear to be left to remove - concretely detecting that all blocks
 	// have been covered actually seems to be a difficult problem
 	notFoundCount := 0
+
+	defer func() {
+		duration := time.Since(start)
+		log.Infof("Prune operation finished after %s with new datastore size of %s (removed %v)", duration, humanize.IBytes(pruner.size), humanize.IBytes(bytesPruned))
+	}()
+
 	for bytesPruned < bytesToPrune {
 		if ctx.Err() != nil {
 			return ctx.Err()
+		}
+
+		// Return file to start
+		if _, err := tmpFile.Seek(0, io.SeekStart); err != nil {
+			return fmt.Errorf("failed to seek back to start of tmp file: %w", err)
 		}
 
 		// Read up to the chosen line and parse the CID
@@ -238,7 +246,8 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 		cidStr := scanner.Text()
 		cid, err := cid.Parse(strings.TrimSpace(cidStr))
 		if err != nil {
-			return fmt.Errorf("failed to parse cid: %w", err)
+			log.Errorf("Failed to parse cid for removal (%s): %w", cidStr, err)
+			continue
 		}
 
 		blockSize, err := pruner.GetSize(ctx, cid)
@@ -263,11 +272,6 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 
 		bytesPruned += uint64(blockSize)
 		notFoundCount = 0
-
-		// Return file to start
-		if _, err := tmpFile.Seek(0, io.SeekStart); err != nil {
-			return fmt.Errorf("failed to seek back to start of tmp file: %w", err)
-		}
 	}
 
 	return nil
