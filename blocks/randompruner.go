@@ -231,7 +231,7 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 		for i := 0; i < cidIndex; i++ {
 			cidStr, err = reader.ReadString('\n')
 			if err != nil {
-				return fmt.Errorf("failed to read cid from tmp file (cid index %v / %v): %w", cidIndex, cidCount, err)
+				return fmt.Errorf("failed to read cid from tmp file (cid index %v / %v, got to i %v): %w", cidIndex, cidCount, i, err)
 			}
 		}
 		cid, err := cid.Parse(cidStr)
