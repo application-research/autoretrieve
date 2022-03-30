@@ -85,6 +85,8 @@ func NewRandomPruner(
 		pruneBytes:  cfg.PruneBytes,
 		pinDuration: cfg.PinDuration,
 		size:        size,
+
+		pins: make(map[cid.Cid]time.Time),
 	}, nil
 }
 
