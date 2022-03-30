@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"context"
 	"errors"
-	"fmt"
 	"math/rand"
 	"os"
 	"path"
@@ -157,18 +156,21 @@ func (pruner *RandomPruner) Poll(ctx context.Context) {
 	}
 
 	if pruner.size >= pruner.threshold {
-		go func() {
-			log.Infof("Starting prune operation with original datastore size of %s", humanize.IBytes(pruner.size))
-			start := time.Now()
+		if pruner.lk.TryLock() {
+			go func() {
+				defer pruner.lk.Unlock()
 
-			if err := pruner.prune(ctx, pruner.threshold*pruner.pruneBytes); err != nil {
-				log.Errorf("Random pruner errored during prune: %v", err)
-			}
+				log.Infof("Starting prune operation with original datastore size of %s", humanize.IBytes(pruner.size))
+				start := time.Now()
 
-			duration := time.Since(start)
-			log.Infof("Prune operation finished after %s with new datastore size of %s", duration, humanize.IBytes(pruner.size))
-		}()
+				if err := pruner.prune(ctx, pruner.threshold*pruner.pruneBytes); err != nil {
+					log.Errorf("Random pruner errored during prune: %v", err)
+				}
 
+				duration := time.Since(start)
+				log.Infof("Prune operation finished after %s with new datastore size of %s", duration, humanize.IBytes(pruner.size))
+			}()
+		}
 	}
 }
 
@@ -176,11 +178,6 @@ func (pruner *RandomPruner) Poll(ctx context.Context) {
 //
 // TODO: definitely want to add a span here
 func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) error {
-	if !pruner.lk.TryLock() {
-		return fmt.Errorf("already pruning - this could happen if the blockstore is growing faster than prune processes can run")
-	}
-	defer pruner.lk.Unlock()
-
 	// Get all the keys in the blockstore
 	allCids, err := pruner.AllKeysChan(ctx)
 	if err != nil {
