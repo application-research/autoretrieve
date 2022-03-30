@@ -130,6 +130,12 @@ func main() {
 			Usage:   "Threshold in bytes at which the blockstore pruner will initiate a prune operation",
 			EnvVars: []string{"AUTORETRIEVE_PRUNE_THRESHOLD"},
 		},
+		&cli.DurationFlag{
+			Name:    "pin-duration",
+			Usage:   "How long actively requested blocks should be prevented from being pruned",
+			EnvVars: []string{"AUTORETRIEVE_PRUNE_THRESHOLD"},
+			Value:   time.Hour * 6,
+		},
 		flagMinerWhitelist,
 		flagMinerBlacklist,
 		flagCIDBlacklist,
@@ -188,6 +194,7 @@ func run(cctx *cli.Context) error {
 	maxSendWorkers := cctx.Uint("max-send-workers")
 	perMinerRetrievalLimit := cctx.Uint("per-miner-retrieval-limit")
 	pruneThreshold := cctx.Uint64("prune-threshold")
+	pinDuration := cctx.Duration("pin-duration")
 
 	if err := metrics.GoMetricsInjectPrometheus(); err != nil {
 		logger.Warnf("Failed to inject prometheus: %v", err)
@@ -270,12 +277,15 @@ func run(cctx *cli.Context) error {
 	// Only wrap blockstore with pruner when a prune threshold is specified
 	if pruneThreshold != 0 {
 		blockstore, err = blocks.NewRandomPruner(cctx.Context, blockstore, blockstoreDatastore, blocks.RandomPrunerConfig{
-			Threshold: pruneThreshold,
+			Threshold:   pruneThreshold,
+			PinDuration: pinDuration,
 		})
 
 		if err != nil {
 			return err
 		}
+	} else {
+		logger.Warnf("No prune threshold provided, blockstore garbage collection will not be performed")
 	}
 
 	blockManager := blocks.NewManager(blockstore)

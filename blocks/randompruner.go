@@ -71,10 +71,6 @@ func NewRandomPruner(
 		cfg.PruneBytes = cfg.Threshold
 	}
 
-	if cfg.PinDuration == 0 {
-		cfg.PinDuration = time.Hour * 24
-	}
-
 	size, err := datastore.DiskUsage(ctx)
 
 	if err != nil {
