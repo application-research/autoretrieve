@@ -193,6 +193,7 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 	defer tmpFile.Close()
 
 	// Write every non-pinned block on a separate line to the temporary file
+	const cidPadLength = 64
 	writer := bufio.NewWriter(tmpFile)
 	cidCount := 0
 	for cid := range allCids {
@@ -205,7 +206,8 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 			continue
 		}
 
-		if _, err := writer.WriteString(cid.String() + "\n"); err != nil {
+		paddedCidStr := fmt.Sprintf("%-*s", cidPadLength, cid.String())
+		if _, err := writer.WriteString(paddedCidStr + "\n"); err != nil {
 			return fmt.Errorf("failed to write cid to tmp file: %w", err)
 		}
 		cidCount++
@@ -230,23 +232,17 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 			return ctx.Err()
 		}
 
-		// Return file to start
-		if _, err := tmpFile.Seek(0, io.SeekStart); err != nil {
+		// Seek to the line with the CID, read it and parse
+		cidIndex := rand.Int() % cidCount
+		if _, err := tmpFile.Seek((cidPadLength+1)*int64(cidIndex), io.SeekStart); err != nil {
 			return fmt.Errorf("failed to seek back to start of tmp file: %w", err)
 		}
-
-		// Read up to the chosen line and parse the CID
-		cidIndex := rand.Int() % cidCount
 		scanner := bufio.NewScanner(tmpFile)
-		for i := 0; i < cidIndex; i++ {
-			if !scanner.Scan() {
-				return fmt.Errorf("failed to read cid from tmp file (cid index %v / %v, got to i %v): %v", cidIndex, cidCount, i, scanner.Err())
-			}
-		}
+		scanner.Scan()
 		cidStr := scanner.Text()
 		cid, err := cid.Parse(strings.TrimSpace(cidStr))
 		if err != nil {
-			log.Errorf("Failed to parse cid for removal (%s): %w", cidStr, err)
+			log.Errorf("Failed to parse cid for removal (%s): %v", cidStr, err)
 			continue
 		}
 
