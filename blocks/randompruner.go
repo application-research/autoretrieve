@@ -60,7 +60,7 @@ func NewRandomPruner(
 	cfg RandomPrunerConfig,
 ) (*RandomPruner, error) {
 	if cfg.Threshold == 0 {
-		log.Warnf("zero is not a valid prune threshold - do not initialize RandomPruner when it is not intended to be used")
+		log.Warnf("Zero is not a valid prune threshold - do not initialize RandomPruner when it is not intended to be used")
 	}
 
 	if cfg.PruneBytes == 0 {
@@ -72,10 +72,11 @@ func NewRandomPruner(
 	}
 
 	size, err := datastore.DiskUsage(ctx)
-
 	if err != nil {
 		return nil, err
 	}
+
+	log.Infof("Initialized pruner's tracked size as %s", humanize.IBytes(size))
 
 	return &RandomPruner{
 		Blockstore:  inner,
