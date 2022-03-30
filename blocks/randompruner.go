@@ -262,7 +262,10 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 		notFoundCount = 0
 
 		// Return reader to start
-		tmpFile.Seek(0, io.SeekStart)
+		if _, err := tmpFile.Seek(0, io.SeekStart); err != nil {
+			return err
+		}
+
 		reader.Reset(tmpFile)
 	}
 
