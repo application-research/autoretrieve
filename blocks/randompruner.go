@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"errors"
+	"fmt"
 	"io"
 	"math/rand"
 	"os"
@@ -206,7 +207,7 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 		}
 
 		if _, err := writer.WriteString(cid.String() + "\n"); err != nil {
-			return err
+			return fmt.Errorf("failed to write cid to tmp file: %w", err)
 		}
 		cidCount++
 	}
@@ -230,12 +231,12 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 		for i := 0; i < cidIndex; i++ {
 			cidStr, err = reader.ReadString('\n')
 			if err != nil {
-				return err
+				return fmt.Errorf("failed to read cid from tmp file (cid index %v / %v): %w", cidIndex, cidCount, err)
 			}
 		}
 		cid, err := cid.Parse(cidStr)
 		if err != nil {
-			return err
+			return fmt.Errorf("failed to parse cid: %w", err)
 		}
 
 		blockSize, err := pruner.GetSize(ctx, cid)
@@ -263,7 +264,7 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 
 		// Return reader to start
 		if _, err := tmpFile.Seek(0, io.SeekStart); err != nil {
-			return err
+			return fmt.Errorf("failed to seek back to start of tmp file: %w", err)
 		}
 
 		reader.Reset(tmpFile)
