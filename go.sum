@@ -100,6 +100,8 @@ github.com/anmitsu/go-shlex v0.0.0-20161002113705-648efa622239/go.mod h1:2FmKhYU
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
 github.com/apache/thrift v0.12.0/go.mod h1:cp2SuWMxlEZw2r+iP2GNCdIi4C1qmUzdZFSVb+bacwQ=
 github.com/apache/thrift v0.13.0/go.mod h1:cp2SuWMxlEZw2r+iP2GNCdIi4C1qmUzdZFSVb+bacwQ=
+github.com/application-research/filclient v0.0.0-20220304144045-7dd52bc99baf h1:wAdQn5xxrz7nAp0bbvRcTiiG4UMV//gyENAM64dgTbA=
+github.com/application-research/filclient v0.0.0-20220304144045-7dd52bc99baf/go.mod h1:KOQxJUrzOAs2zs852G93MxVwI5uUR+mRgF+kpZ6jnF4=
 github.com/application-research/filclient v0.0.0-20220304150921-3d7237f66cd1 h1:VptzQH88qr4vuR1DvOchD3ma6d5Cqr5y/R+Qqm3566M=
 github.com/application-research/filclient v0.0.0-20220304150921-3d7237f66cd1/go.mod h1:KOQxJUrzOAs2zs852G93MxVwI5uUR+mRgF+kpZ6jnF4=
 github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e/go.mod h1:3U/XgcO3hCbHZ8TKRvWD2dDTCfh9M9ya+I9JpbB7O8o=

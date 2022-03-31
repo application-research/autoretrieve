@@ -3,7 +3,7 @@ module github.com/application-research/autoretrieve
 go 1.18
 
 require (
-	github.com/application-research/filclient v0.0.0-20220304150921-3d7237f66cd1
+	github.com/application-research/filclient v0.0.0-20220304144045-7dd52bc99baf
 	github.com/dustin/go-humanize v1.0.0
 	github.com/filecoin-project/go-address v0.0.6
 	github.com/filecoin-project/go-data-transfer v1.14.0
