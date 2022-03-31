@@ -70,12 +70,8 @@ func (idxf *IndexerEndpoint) FindCandidates(ctx context.Context, cid cid.Cid) ([
 		}
 		for _, val := range multihashResult.ProviderResults {
 			// filter out any results that aren't filecoin graphsync
-			dtm, err := metadata.FromIndexerMetadata(val.Metadata)
-			if err != nil {
-				continue
-			}
-
-			if dtm.ExchangeFormat() != metadata.FilecoinV1 {
+			var dtm metadata.GraphsyncFilecoinV1
+			if err := dtm.UnmarshalBinary(val.Metadata); err != nil {
 				continue
 			}
 
