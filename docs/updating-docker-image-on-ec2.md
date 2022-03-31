@@ -40,7 +40,12 @@ $ docker push 407967248065.dkr.ecr.us-east-2.amazonaws.com/autoretrieve:latest
 
 **Note:** The machine needs to have been setup with the [Docker Credential Helper for ECR](https://github.com/awslabs/amazon-ecr-credential-helper) prior to running the following command.
 
-The following command will pull and run the latest autoretrieve docker image from ECR using [`docker run`](https://docs.docker.com/engine/reference/commandline/run/). The environment variables passed in are configuring the autoretrieve instance, and can be substituted for any valid configuration value for the given argument. We use the `DOCKER_BUILDKIT` environment variable for speedy runs.
+The following command will pull the latest autoretrieve docker image from ECR using [`docker run`](https://docs.docker.com/engine/reference/commandline/run/).
 ```
-$ DOCKER_BUILDKIT=1 docker run -e FULLNODE_API_INFO=wss://api.chain.love -e AUTORETRIEVE_ENDPOINT_TYPE=indexer -e AUTORETRIEVE_ENDPOINT=https://cid/contact --rm -it 407967248065.dkr.ecr.us-east-2.amazonaws.com/autoretrieve:latest
+$ docker pull 407967248065.dkr.ecr.us-east-2.amazonaws.com/autoretrieve:latest
+```
+
+The following command will run the docker image. The environment variables passed in are configuring the autoretrieve instance, and can be substituted for any valid configuration value for the given argument. We use the `DOCKER_BUILDKIT` environment variable for speedy runs.
+```
+$ DOCKER_BUILDKIT=1 docker run -e FULLNODE_API_INFO=wss://api.chain.love -e AUTORETRIEVE_ENDPOINT_TYPE=indexer -e AUTORETRIEVE_ENDPOINT=https://cid.contact -e AUTORETRIEVE_PRUNE_THRESHOLD=100000000000 -e GOLOG_FILE=data/logs/logs.txt -e GOLOG_OUTPUT=stdout+file -v /storage/autoretrieve/data:/app/data -p 6746:6746 -p 8080:8080 --rm -it 407967248065.dkr.ecr.us-east-2.amazonaws.com/autoretrieve:latest
 ```
