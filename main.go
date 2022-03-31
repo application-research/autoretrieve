@@ -133,7 +133,7 @@ func main() {
 		&cli.DurationFlag{
 			Name:    "pin-duration",
 			Usage:   "How long actively requested blocks should be prevented from being pruned",
-			EnvVars: []string{"AUTORETRIEVE_PRUNE_THRESHOLD"},
+			EnvVars: []string{"AUTORETRIEVE_PIN_DURATION"},
 			Value:   time.Hour * 6,
 		},
 		flagMinerWhitelist,
