@@ -6,6 +6,7 @@ import (
 
 	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/filecoin"
+	"github.com/application-research/autoretrieve/metrics"
 	"github.com/ipfs/go-bitswap/message"
 	bitswap_message_pb "github.com/ipfs/go-bitswap/message/pb"
 	"github.com/ipfs/go-bitswap/network"
@@ -19,6 +20,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/routing"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/fullrt"
+	"go.opencensus.io/stats"
 )
 
 var logger = log.Logger("autoretrieve")
@@ -196,6 +198,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 					Work:     len(block.RawData()),
 					Data:     block,
 				})
+				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
 			}
 		case provider.retriever == nil:
 			// If the provider is disabled, we can't really do anything, send

@@ -38,7 +38,6 @@ import (
 	"github.com/libp2p/go-libp2p-core/network"
 	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
 )
 
@@ -206,7 +205,7 @@ func run(cctx *cli.Context) error {
 	)
 
 	go func() {
-		http.Handle("/metrics", promhttp.Handler())
+		http.Handle("/metrics", metrics.PrometheusHandler())
 		http.HandleFunc("/debug/stacktrace", func(w http.ResponseWriter, r *http.Request) {
 			buf := make([]byte, 64<<20)
 			for i := 0; ; i++ {
