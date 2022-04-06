@@ -227,6 +227,12 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 		log.Infof("Prune operation finished after %s with new datastore size of %s (removed %v)", duration, humanize.IBytes(pruner.size), humanize.IBytes(bytesPruned))
 	}()
 
+	// If there aren't any non-pinned CIDs to remove, just finish now
+	if cidCount == 0 {
+		log.Warnf("No non-pinned blocks available to remove, consider lowering the pin duration (currently %s)", pruner.pinDuration)
+		return nil
+	}
+
 	for bytesPruned < bytesToPrune {
 		if ctx.Err() != nil {
 			return ctx.Err()
