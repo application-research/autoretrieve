@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"net/http"
 	"time"
 
@@ -64,7 +65,11 @@ func (idxf *IndexerEndpoint) FindCandidates(ctx context.Context, cid cid.Cid) ([
 	hash := string(cid.Hash())
 	// turn parsedResp into records.
 	var matches []filecoin.RetrievalCandidate
-	for _, multihashResult := range parsedResp.MultihashResults {
+
+	indices := rand.Perm(len(parsedResp.MultihashResults))
+	for _, i := range indices {
+		multihashResult := parsedResp.MultihashResults[i]
+
 		if !(string(multihashResult.Multihash) == hash) {
 			continue
 		}
