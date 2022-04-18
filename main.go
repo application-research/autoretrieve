@@ -12,7 +12,6 @@ import (
 
 	"github.com/application-research/autoretrieve/metrics"
 	"github.com/ipfs/go-log/v2"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v2"
 )
@@ -133,7 +132,7 @@ func cmd(cctx *cli.Context) error {
 	}
 
 	go func() {
-		http.Handle("/metrics", promhttp.Handler())
+		http.Handle("/metrics", metrics.PrometheusHandler())
 		http.HandleFunc("/debug/stacktrace", func(w http.ResponseWriter, r *http.Request) {
 			buf := make([]byte, 64<<20)
 			for i := 0; ; i++ {
