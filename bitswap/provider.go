@@ -41,9 +41,9 @@ const (
 const targetMessageSize = 16384
 
 type ProviderConfig struct {
-	CIDBlacklist   map[cid.Cid]bool
-	MaxSendWorkers uint
-	UseFullRT      bool
+	CidBlacklist      map[cid.Cid]bool
+	MaxBitswapWorkers uint
+	UseFullRT         bool
 }
 
 type Provider struct {
@@ -111,7 +111,7 @@ func (provider *Provider) startSend() {
 	provider.sendWorkerCountLk.Lock()
 	defer provider.sendWorkerCountLk.Unlock()
 
-	if provider.sendWorkerCount < provider.config.MaxSendWorkers && provider.taskQueue.Stats().NumPending != 0 {
+	if provider.sendWorkerCount < provider.config.MaxBitswapWorkers && provider.taskQueue.Stats().NumPending != 0 {
 		provider.sendWorkerCount++
 
 		go func() {
@@ -166,7 +166,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 		}
 
 		// We want to skip CIDs in the blacklist, send DONT_HAVE
-		if provider.config.CIDBlacklist[entry.Cid] {
+		if provider.config.CidBlacklist[entry.Cid] {
 			logger.Debugf("Replying DONT_HAVE for blacklisted CID: %s", entry.Cid)
 			provider.taskQueue.PushTasks(sender, peertask.Task{
 				Topic:    topicSendDontHave,
