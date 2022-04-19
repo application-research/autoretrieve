@@ -48,16 +48,18 @@ type Autoretrieve struct {
 	host host.Host
 }
 
-func New(cctx *cli.Context, cfg Config) (*Autoretrieve, error) {
+func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 
-	logger.Infof("Using data directory: %s", cfg.DataDir)
+	if dataDir == "" {
+		return nil, fmt.Errorf("dataDir must be set")
+	}
 
 	if cfg.Metrics == nil {
 		cfg.Metrics = metrics.NewNoop()
 	}
 
 	// Initialize P2P host
-	host, err := initHost(cctx.Context, cfg.DataDir, cfg.LogResourceManager, multiaddr.StringCast("/ip4/0.0.0.0/tcp/6746"))
+	host, err := initHost(cctx.Context, dataDir, cfg.LogResourceManager, multiaddr.StringCast("/ip4/0.0.0.0/tcp/6746"))
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +77,7 @@ func New(cctx *cli.Context, cfg Config) (*Autoretrieve, error) {
 		return nil, err
 	}
 
-	blockstoreDatastore, err := flatfs.CreateOrOpen(filepath.Join(cfg.DataDir, blockstoreSubdir), parseShardFunc, false)
+	blockstoreDatastore, err := flatfs.CreateOrOpen(filepath.Join(dataDir, blockstoreSubdir), parseShardFunc, false)
 	if err != nil {
 		return nil, err
 	}
@@ -102,14 +104,14 @@ func New(cctx *cli.Context, cfg Config) (*Autoretrieve, error) {
 	}
 
 	// Open datastore
-	datastore, err := leveldb.NewDatastore(filepath.Join(cfg.DataDir, datastoreSubdir), nil)
+	datastore, err := leveldb.NewDatastore(filepath.Join(dataDir, datastoreSubdir), nil)
 	if err != nil {
 		return nil, err
 	}
 
 	// Set up FilClient
 
-	keystore, err := keystore.OpenOrInitKeystore(filepath.Join(cfg.DataDir, walletSubdir))
+	keystore, err := keystore.OpenOrInitKeystore(filepath.Join(dataDir, walletSubdir))
 	if err != nil {
 		return nil, fmt.Errorf("keystore initialization failed: %w", err)
 	}
@@ -136,7 +138,7 @@ func New(cctx *cli.Context, cfg Config) (*Autoretrieve, error) {
 		walletAddr,
 		blockManager,
 		datastore,
-		cfg.DataDir,
+		dataDir,
 		func(cfg *filclient.Config) {
 			cfg.LogRetrievalProgressEvents = true
 		},

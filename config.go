@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path"
 	"strings"
 	"time"
 
@@ -162,7 +161,6 @@ type MinerConfig struct {
 
 // All config values should be safe to leave uninitialized
 type Config struct {
-	DataDir            string                  `yaml:"-"`
 	EndpointType       EndpointType            `yaml:"endpoint-type"`
 	EndpointURL        string                  `yaml:"endpoint-url"`
 	MaxBitswapWorkers  uint                    `yaml:"max-bitswap-workers"`
@@ -239,13 +237,7 @@ func LoadConfig(path string) (Config, error) {
 }
 
 func DefaultConfig() Config {
-	homedir, err := os.UserHomeDir()
-	if err != nil {
-		homedir = "./"
-	}
-
 	return Config{
-		DataDir:            path.Join(homedir, "/.autoretrieve"),
 		EndpointType:       EndpointTypeIndexer,
 		EndpointURL:        "https://cid.contact",
 		MaxBitswapWorkers:  1,

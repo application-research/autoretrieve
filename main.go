@@ -210,16 +210,27 @@ func cmdPrintConfig(cctx *cli.Context) error {
 	return nil
 }
 
+func dataDirPath(cctx *cli.Context) string {
+	dataDir := cctx.String("data-dir")
+
+	if dataDir == "" {
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			homeDir = "./"
+		}
+
+		dataDir = homeDir
+	}
+
+	return path.Join(dataDir, "/.autoretrieve")
+}
+
 func fullConfigPath(cctx *cli.Context) string {
-	return path.Join(cctx.String("data-dir"), configPath)
+	return path.Join(dataDirPath(cctx), configPath)
 }
 
 // Updates a file-loaded config using the args passed in through CLI
 func applyConfigCLIOverrides(cctx *cli.Context, cfg *Config) error {
-	if cctx.IsSet("data-dir") {
-		cfg.DataDir = cctx.String("data-dir")
-	}
-
 	if cctx.IsSet("endpoint-type") {
 		endpointType, err := ParseEndpointType(cctx.String("endpoint-type"))
 		if err != nil {
