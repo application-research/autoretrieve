@@ -32,8 +32,7 @@ WORKDIR /app
 COPY --from=builder /app/autoretrieve autoretrieve
 
 # Create the /app/data volume for the autoretrieve data directory
-VOLUME /app/data
-ENV AUTORETRIEVE_DATA_DIR=/app/data
+VOLUME /root/.autoretrieve
 
 # Libp2p port
 EXPOSE 6746

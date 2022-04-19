@@ -162,7 +162,7 @@ func cmd(cctx *cli.Context) error {
 		metrics.NewGoMetrics(cctx.Context),
 	)
 
-	autoretrieve, err := New(cctx, cfg)
+	autoretrieve, err := New(cctx, dataDirPath(cctx), cfg)
 	if err != nil {
 		return err
 	}

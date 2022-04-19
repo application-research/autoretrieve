@@ -20,9 +20,8 @@ By default, config files and cache are stored at `~/.autoretrieve`. When using
 docker-compose, a binding is created to this directory. This location can be
 configured by setting `AUTORETRIEVE_DATA_DIR`.
 
-Internally, Docker sets `AUTORETRIEVE_DATA_DIR=/app/data`, overriding the normal
-`~/.autoretrieve`, and creates a volume for the data directory at that path
-within the image. Keep this in mind when using the Docker image directly.
+Internally, the Docker volume's path on the image is `/root/.autoretrieve`. Keep
+this in mind when using the Docker image directly.
 
 ## Configuration
 

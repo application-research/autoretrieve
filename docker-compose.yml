@@ -12,6 +12,6 @@ services:
     ports: 
       - "6746:6746"
     volumes:
-      - ${AUTORETRIEVE_DATA_DIR:-~/.autoretrieve}:/app/data
+      - ${AUTORETRIEVE_DATA_DIR:-~/.autoretrieve}:/root/.autoretrieve
   # db:
   #   image: postgres
