@@ -54,6 +54,10 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		return nil, fmt.Errorf("dataDir must be set")
 	}
 
+	if err := os.MkdirAll(dataDir, 0744); err != nil {
+		return nil, err
+	}
+
 	if cfg.Metrics == nil {
 		cfg.Metrics = metrics.NewNoop()
 	}

@@ -264,7 +264,7 @@ func WriteConfig(cfg Config, path string) error {
 		return err
 	}
 
-	return os.WriteFile(path, bytes, 0666)
+	return os.WriteFile(path, bytes, 0644)
 }
 
 func cidListToMap(ctx context.Context, cidList []cid.Cid) map[cid.Cid]bool {
