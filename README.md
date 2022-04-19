@@ -81,9 +81,9 @@ COMMANDS:
    help, h       Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --data-dir value        (default: "./data") [$AUTORETRIEVE_DATA_DIR]
-   --endpoint-url value    Indexer or Estuary endpoint to get retrieval candidates from (default: "https://api.estuary.tech/retrieval-candidates") [$AUTORETRIEVE_ENDPOINT_URL]
-   --endpoint-type value   Type of endpoint for finding data (valid values are "estuary" and "indexer") (default: "estuary") [$AUTORETRIEVE_ENDPOINT_TYPE]
+   --data-dir value        (default: "$HOME/.autoretrieve") [$AUTORETRIEVE_DATA_DIR]
+   --endpoint-url value    Indexer or Estuary endpoint to get retrieval candidates from (default: "https://cid.contact") [$AUTORETRIEVE_ENDPOINT_URL]
+   --endpoint-type value   Type of endpoint for finding data (valid values are "estuary" and "indexer") (default: "indexer") [$AUTORETRIEVE_ENDPOINT_TYPE]
    --disable-retrieval     Whether to disable the retriever module, for testing provider only (default: false) [$AUTORETRIEVE_DISABLE_RETRIEVAL]
    --use-fullrt            Whether to use the full routing table instead of DHT (default: false) [$AUTORETRIEVE_USE_FULLRT]
    --log-resource-manager  Whether to present output about the current state of the libp2p resource manager (default: false) [$AUTORETRIEVE_LOG_RESOURCE_MANAGER]
