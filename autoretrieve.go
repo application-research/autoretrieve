@@ -50,6 +50,8 @@ type Autoretrieve struct {
 
 func New(cctx *cli.Context, cfg Config) (*Autoretrieve, error) {
 
+	logger.Infof("Using data directory: %s", cfg.DataDir)
+
 	if cfg.Metrics == nil {
 		cfg.Metrics = metrics.NewNoop()
 	}

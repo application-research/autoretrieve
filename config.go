@@ -162,7 +162,7 @@ type MinerConfig struct {
 
 // All config values should be safe to leave uninitialized
 type Config struct {
-	DataDir            string                  `yaml:"data-dir"`
+	DataDir            string                  `yaml:"-"`
 	EndpointType       EndpointType            `yaml:"endpoint-type"`
 	EndpointURL        string                  `yaml:"endpoint-url"`
 	MaxBitswapWorkers  uint                    `yaml:"max-bitswap-workers"`

@@ -23,6 +23,7 @@
   - `miner-blacklist.txt`
   - `miner-whitelist.txt`
   - `cid-blacklist.txt`
+- BREAKING CHANGE: change default data dir to `~/.autoretrieve`
 - feat: create self-contained Autoretrieve and accompanying Config types, and separate from CLI code
 - feat: adopt config file `config.yaml`
 - feat: add subcommand `gen-config`

@@ -6,8 +6,8 @@ or indexers.
 ## Usage
 
 Autoretrieve uses Docker with Buildkit for build caching. Docker rebuilds are
-quite fast, it is recommended to use docker-compose for both production and
-development. Check the docker-compose documentation for more help.
+quite fast, and it is usable for local development. Check the docker-compose
+documentation for more help.
 
 ```console
 $ DOCKER_BUILDKIT=1 docker-compose up
@@ -16,9 +16,13 @@ $ DOCKER_BUILDKIT=1 docker-compose up
 You may optionally set `FULLNODE_API_INFO` to a custom fullnode's WebSocket
 address. The default is `FULLNODE_API_INFO=wss://api.chain.love`.
 
-By default, config files and cache are stored in mounted Docker volume at
-`./data` in the autoretrieve directory. This location can be configured.
+By default, config files and cache are stored at `~/.autoretrieve`. When using
+docker-compose, a binding is created to this directory. This location can be
+configured by setting `AUTORETRIEVE_DATA_DIR`.
 
+Internally, Docker sets `AUTORETRIEVE_DATA_DIR=/app/data`, overriding the normal
+`~/.autoretrieve`, and creates a volume for the data directory at that path
+within the image. Keep this in mind when using the Docker image directly.
 
 ## Configuration
 
@@ -34,7 +38,6 @@ Configurations are applied in the following order, from least to most important:
 ### YAML Example
 
 ```yaml
-data-dir: ./data
 endpoint-type: indexer # indexer | estuary
 endpoint-url: https://cid.contact # for estuary endpoint-type: https://api.estuary.tech/retrieval-candidates
 max-bitswap-workers: 1
