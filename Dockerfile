@@ -31,7 +31,8 @@ RUN --mount=type=cache,target=/var/cache/apt \
 WORKDIR /app
 COPY --from=builder /app/autoretrieve autoretrieve
 
-# Create the /app/data volume for the autoretrieve data directory
+# Create the volume for the autoretrieve data directory
+# This is the default directory for autoretrieve configuration for this docker container
 VOLUME /root/.autoretrieve
 
 # Libp2p port
@@ -41,4 +42,8 @@ EXPOSE 6746
 EXPOSE 80
 EXPOSE 443
 
-CMD ["./autoretrieve"]
+# This env var is required deep in lotus
+# Hardcoding for now for convenience until we have a reason to make it easily configurable
+ENV FULLNODE_API_INFO="wss://api.chain.love"
+
+ENTRYPOINT [ "./autoretrieve" ]

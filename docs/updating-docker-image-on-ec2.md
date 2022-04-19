@@ -21,7 +21,7 @@ Build the image locally using [`docker build`](https://docs.docker.com/engine/re
 
 **NOTE:** The image takes advantage of [Docker BuildKit](https://docs.docker.com/develop/develop-images/build_enhancements/) to speed up builds. It is recommended to use the `DOCKER_BUILDKIT=1` 
 ```
-$ DOCKER_BUILDKIT=1 docker build -t autoretreive .
+$ DOCKER_BUILDKIT=1 docker build -t autoretrieve .
 ```
 
 Tag the image using [`docker tag`](https://docs.docker.com/engine/reference/commandline/tag/).
@@ -47,5 +47,5 @@ $ docker pull 407967248065.dkr.ecr.us-east-2.amazonaws.com/autoretrieve:latest
 
 The following command will run the docker image. The environment variables passed in are configuring the autoretrieve instance, and can be substituted for any valid configuration value for the given argument. We use the `DOCKER_BUILDKIT` environment variable for speedy runs.
 ```
-$ DOCKER_BUILDKIT=1 docker run -e FULLNODE_API_INFO=wss://api.chain.love -e AUTORETRIEVE_ENDPOINT_TYPE=indexer -e AUTORETRIEVE_ENDPOINT=https://cid.contact -e AUTORETRIEVE_PRUNE_THRESHOLD=100000000000 -e GOLOG_FILE=data/logs/logs.txt -e GOLOG_OUTPUT=stdout+file -v /storage/autoretrieve/data:/app/data -p 6746:6746 -p 8080:8080 --rm -it 407967248065.dkr.ecr.us-east-2.amazonaws.com/autoretrieve:latest
+$ DOCKER_BUILDKIT=1 docker run --rm -it -v /storage/autoretrieve/data:/root/.autoretrieve -p 6746:6746 -p 8080:8080 407967248065.dkr.ecr.us-east-2.amazonaws.com/autoretrieve:latest
 ```
