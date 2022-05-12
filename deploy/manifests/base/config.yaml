@@ -1,0 +1,16 @@
+endpoint-type: indexer
+endpoint-url: https://cid.contact
+max-bitswap-workers: 1
+use-fullrt: false
+prune-threshold: 0 B
+pin-duration: 1h0m0s
+log-resource-manager: false
+log-retrieval-stats: false
+disable-retrieval: false
+cid-blacklist: []
+miner-blacklist: []
+miner-whitelist: []
+default-miner-config:
+    retrieval-timeout: 1m0s
+    max-concurrent-retrievals: 1
+miner-configs: {}
