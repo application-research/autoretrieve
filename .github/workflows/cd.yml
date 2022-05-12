@@ -1,0 +1,43 @@
+name: CD
+on:
+  push:
+    branches:
+      - 'cd/dev'
+
+jobs:
+  pull-request:
+    name: Open PR to master
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Create Pull Request
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const head = process.env.GITHUB_REF_NAME;
+            const env = head.replace(/cd\//g, '');
+            core.info(`Checking branch '${head}' for automated deployment to '${env}' environment...`);
+            
+            const { repo, owner } = context.repo;
+            try {
+              const result = await github.rest.pulls.create({
+                title: `Deploy latest to \`${env}\` environment`,
+                owner,
+                repo,
+                head,
+                base: 'master',
+                body: `Approve changes and merge this PR to trigger deployment to \`${env}\` environment.`
+              });
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: result.data.number,
+                labels: ['cd', `env:${env}`]
+              });
+            } catch (e) {
+              if (!e.message.includes('A pull request already exists')) {
+                throw e
+              }
+              core.info('Skipped PR creation since it already exists.')
+            }

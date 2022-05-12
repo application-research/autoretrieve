@@ -1,0 +1,50 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autoretrieve
+  namespace: autoretrieve
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: autoretrieve
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: autoretrieve
+    spec:
+      containers:
+        - name: autoretrieve
+          image: autoretrieve
+          args:
+            - --data-dir=/data
+          envFrom:
+            - configMapRef:
+                name: autoretrieve-env
+          ports:
+            - name: libp2p
+              containerPort: 6746
+            - name: admin
+              containerPort: 8080
+          readinessProbe:
+            tcpSocket:
+              port: libp2p
+          volumeMounts:
+            - name: config
+              mountPath: /data/.autoretrieve/config.yaml
+              subPath: config.yaml
+            - name: identity
+              mountPath: /data/.autoretrieve/peerkey
+              subPath: peerkey
+      volumes:
+        - name: config
+          configMap:
+            name: autoretrieve-config
+        - name: identity
+          secret:
+            secretName: autoretrieve-identity
+            items:
+              - key: peerkey.encrypted
+                path: ./peerkey

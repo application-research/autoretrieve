@@ -1,0 +1,21 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: autoretrieve
+
+resources:
+  - deployment.yaml
+  - service.yaml
+
+configMapGenerator:
+  - name: autoretrieve-config
+    files:
+      - config.yaml
+  - name: autoretrieve-env
+    literals:
+      - FULLNODE_API_INFO=wss://api.chain.love
+
+secretGenerator:
+  - name: autoretrieve-identity
+    files:
+      - peerkey.encrypted
