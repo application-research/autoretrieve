@@ -6,9 +6,11 @@ namespace: autoretrieve
 resources:
   - ../../base
   - monitor.yaml
+  - pvc.yaml
 
 patchesStrategicMerge:
   - service-patch.yaml
+  - deployment-patch.yaml
 
 replicas:
   - name: autoretrieve
