@@ -41,7 +41,7 @@ endpoint-type: indexer # indexer | estuary
 endpoint-url: https://cid.contact # for estuary endpoint-type: https://api.estuary.tech/retrieval-candidates
 max-bitswap-workers: 1
 use-fullrt: false
-prune-threshold: 1GiB # 1000000000, 1 GB, etc.
+prune-threshold: 1GiB # 1000000000, 1 GB, etc. Uses go-humanize for parsing. Table of valid byte sizes can be found here: https://github.com/dustin/go-humanize/blob/v1.0.0/bytes.go#L34-L62
 pin-duration: 1h # 1h30m, etc.
 log-resource-manager: false
 log-retrieval-stats: false
