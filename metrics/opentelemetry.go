@@ -60,7 +60,7 @@ var (
 	}
 	retrievalDealActiveView = &view.View{
 		Measure:     RetrievalDealActiveCount,
-		Aggregation: view.Sum(),
+		Aggregation: view.Count(),
 	}
 	retrievalDealCostView = &view.View{
 		Measure:     RetrievalDealCost,
