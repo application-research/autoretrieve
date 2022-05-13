@@ -1,28 +1,22 @@
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
-
 namespace: autoretrieve
-
 resources:
   - ../../base
   - monitor.yaml
   - pvc.yaml
-
 patchesStrategicMerge:
   - service-patch.yaml
   - deployment-patch.yaml
-
 replicas:
-  - name: autoretrieve
-    count: 1
-
+- name: autoretrieve
+  count: 1
 secretGenerator:
-  - name: autoretrieve-identity
-    behavior: replace
-    files:
-      - peerkey.encrypted
-
+- name: autoretrieve-identity
+  behavior: replace
+  files:
+  - peerkey.encrypted
 images:
-  - name: autoretrieve
-    newName: 407967248065.dkr.ecr.us-east-2.amazonaws.com/autoretrieve/autoretrieve # {"$imagepolicy": "autoretrieve:autoretrieve:name"}
-    newTag: 20220512103615-07bc35e10c78bfe7085351d1b8e5bb206b82a2c8 # {"$imagepolicy": "autoretrieve:autoretrieve:tag"}
+- name: autoretrieve
+  newName: 407967248065.dkr.ecr.us-east-2.amazonaws.com/autoretrieve/autoretrieve # {"$imagepolicy": "autoretrieve:autoretrieve:name"}
+  newTag: 20220513181402-0d2556c57cd1a46bdb627500f986597b7d3c2bf4 # {"$imagepolicy": "autoretrieve:autoretrieve:tag"}
