@@ -2,12 +2,12 @@ apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: autoretrieve
 resources:
-- ../../base
-- monitor.yaml
-- pvc.yaml
+  - ../../base
+  - monitor.yaml
+  - pvc.yaml
 patchesStrategicMerge:
-- service-patch.yaml
-- deployment-patch.yaml
+  - service-patch.yaml
+  - deployment-patch.yaml
 replicas:
 - name: autoretrieve
   count: 1
