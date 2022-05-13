@@ -2,7 +2,7 @@ endpoint-type: indexer
 endpoint-url: https://cid.contact
 max-bitswap-workers: 1
 use-fullrt: false
-prune-threshold: 0 B
+prune-threshold: 45 GB
 pin-duration: 1h0m0s
 log-resource-manager: false
 log-retrieval-stats: false

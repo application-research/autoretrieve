@@ -21,6 +21,7 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/fullrt"
 	"go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 )
 
 var logger = log.Logger("autoretrieve")
@@ -165,88 +166,65 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 			continue
 		}
 
+		stats.Record(ctx, metrics.BitswapRequestCount.M(1))
+
 		// We want to skip CIDs in the blacklist, send DONT_HAVE
 		if provider.config.CidBlacklist[entry.Cid] {
 			logger.Debugf("Replying DONT_HAVE for blacklisted CID: %s", entry.Cid)
-			provider.taskQueue.PushTasks(sender, peertask.Task{
-				Topic:    topicSendDontHave,
-				Priority: 0,
-				Work:     entry.Cid.ByteLen(),
-				Data:     entry.Cid,
-			})
+			provider.sendDontHave(ctx, sender, entry, "blacklisted_cid")
 			continue
 		}
 
 		// First we check the local blockstore
 		block, err := provider.blockManager.Get(ctx, entry.Cid)
 
-		switch {
-		case err == nil:
-			// If we did have the block locally, just respond with that
+		// If we did have the block locally, just respond with that
+		if err == nil {
 			switch entry.WantType {
 			case wantTypeHave:
-				provider.taskQueue.PushTasks(sender, peertask.Task{
-					Topic:    topicSendHave,
-					Priority: 0,
-					Work:     block.Cid().ByteLen(),
-					Data:     block.Cid(),
-				})
+				provider.sendHave(ctx, sender, block)
+				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
+
 			case wantTypeBlock:
-				provider.taskQueue.PushTasks(sender, peertask.Task{
-					Topic:    topicSendBlock,
-					Priority: 0,
-					Work:     len(block.RawData()),
-					Data:     block,
-				})
+				provider.sendBlock(ctx, sender, block)
 				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
 			}
-		case provider.retriever == nil:
-			// If the provider is disabled, we can't really do anything, send
-			// DONT_HAVE
-			provider.taskQueue.PushTasks(sender, peertask.Task{
-				Topic:    topicSendDontHave,
-				Priority: 0,
-				Work:     entry.Cid.ByteLen(),
-				Data:     entry.Cid,
-			})
-		default:
-			// Otherwise, we will need to ask for it...
-			if err := provider.retriever.Request(entry.Cid); err != nil {
-				// If request failed, it means there's no way we'll be able to
-				// get that block at the moment, so respond with DONT_HAVE
-				provider.taskQueue.PushTasks(sender, peertask.Task{
-					Topic:    topicSendDontHave,
-					Priority: 0,
-					Work:     entry.Cid.ByteLen(),
-					Data:     entry.Cid,
-				})
-			} else {
-				// Queue the block to be sent once we get it
-				var callback func(blocks.Block)
-				switch entry.WantType {
-				case wantTypeHave:
-					callback = func(block blocks.Block) {
-						provider.taskQueue.PushTasks(sender, peertask.Task{
-							Topic:    topicSendHave,
-							Priority: 0,
-							Work:     block.Cid().ByteLen(),
-							Data:     block.Cid(),
-						})
-					}
-				case wantTypeBlock:
-					callback = func(block blocks.Block) {
-						provider.taskQueue.PushTasks(sender, peertask.Task{
-							Topic:    topicSendBlock,
-							Priority: 0,
-							Work:     len(block.RawData()),
-							Data:     block,
-						})
-					}
-				}
-				if err := provider.blockManager.GetAwait(ctx, entry.Cid, callback); err != nil {
-					logger.Errorf("Error waiting for block: %v", err)
-				}
+
+			continue
+		}
+
+		// If the provider is disabled, we can't really do anything, send DONT_HAVE
+		if provider.retriever == nil {
+			provider.sendDontHave(ctx, sender, entry, "disabled_retriever")
+			continue
+		}
+
+		// Otherwise, we will need to ask for it...
+		requestErr := provider.retriever.Request(entry.Cid)
+		stats.Record(ctx, metrics.BitswapRetrieverRequestCount.M(1))
+
+		// If request failed, it means there's no way we'll be able to
+		// get that block at the moment, so respond with DONT_HAVE
+		if requestErr != nil {
+			provider.sendDontHave(ctx, sender, entry, "failed_retriever_request")
+			continue
+		}
+
+		// Queue the block to be sent once we get it
+		var callback func(blocks.Block)
+		switch entry.WantType {
+		case wantTypeHave:
+			callback = func(block blocks.Block) {
+				provider.sendHave(ctx, sender, block)
 			}
+		case wantTypeBlock:
+			callback = func(block blocks.Block) {
+				provider.sendBlock(ctx, sender, block)
+			}
+		}
+
+		if err := provider.blockManager.GetAwait(ctx, entry.Cid, callback); err != nil {
+			logger.Errorf("Error waiting for block: %v", err)
 		}
 	}
 
@@ -260,6 +238,48 @@ func (provider *Provider) ReceiveError(err error) {
 func (provider *Provider) PeerConnected(peer peer.ID) {}
 
 func (provider *Provider) PeerDisconnected(peer peer.ID) {}
+
+// Adds a BLOCK task to the task queue
+func (provider *Provider) sendBlock(ctx context.Context, sender peer.ID, block blocks.Block) {
+	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "BLOCK"))
+
+	provider.taskQueue.PushTasks(sender, peertask.Task{
+		Topic:    topicSendBlock,
+		Priority: 0,
+		Work:     len(block.RawData()),
+		Data:     block,
+	})
+
+	stats.Record(ctx, metrics.BitswapResponseCount.M(1))
+}
+
+// Adds a DONT_HAVE task to the task queue
+func (provider *Provider) sendDontHave(ctx context.Context, sender peer.ID, entry message.Entry, reason string) {
+	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "DONT_HAVE"), tag.Insert(metrics.BitswapDontHaveReason, reason))
+
+	provider.taskQueue.PushTasks(sender, peertask.Task{
+		Topic:    topicSendDontHave,
+		Priority: 0,
+		Work:     entry.Cid.ByteLen(),
+		Data:     entry.Cid,
+	})
+
+	stats.Record(ctx, metrics.BitswapResponseCount.M(1))
+}
+
+// Adds a HAVE task to the task queue
+func (provider *Provider) sendHave(ctx context.Context, sender peer.ID, block blocks.Block) {
+	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "HAVE"))
+
+	provider.taskQueue.PushTasks(sender, peertask.Task{
+		Topic:    topicSendHave,
+		Priority: 0,
+		Work:     block.Cid().ByteLen(),
+		Data:     block.Cid(),
+	})
+
+	stats.Record(ctx, metrics.BitswapResponseCount.M(1))
+}
 
 // Sends either a HAVE or a block to a peer, depending on whether the peer
 // requested a WANT_HAVE or WANT_BLOCK.
