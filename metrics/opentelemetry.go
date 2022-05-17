@@ -17,7 +17,7 @@ var (
 	RetrievalDealActiveCount     = stats.Int64("retrieval_deal_active_total", "The number of active retrieval deals that have not yet succeeded or failed", stats.UnitDimensionless)
 	RetrievalDealDuration        = stats.Float64("retrieval_deal_duration_seconds", "The duration in seconds of a retrieval deal with a storage provider", stats.UnitSeconds)
 	RetrievalDealFailCount       = stats.Int64("retrieval_deal_fail_total", "The number of failed retrieval deals with storage providers", stats.UnitDimensionless)
-	RetrievalDealSize            = stats.Int64("retrieval_deal_size_bytes", "The size in bytes of a retrieval deal with a storage provider", stats.UnitSeconds)
+	RetrievalDealSize            = stats.Int64("retrieval_deal_size_bytes", "The size in bytes of a retrieval deal with a storage provider", stats.UnitDimensionless)
 	RetrievalDealSuccessCount    = stats.Int64("retrieval_deal_success_total", "The number of successful retrieval deals with storage providers", stats.UnitDimensionless)
 	RetrievalRequestCount        = stats.Int64("retrieval_request_total", "The number of retrieval deals initiated with storage providers", stats.UnitDimensionless)
 	RetrievalResponseCount       = stats.Int64("retrieval_response_total", "The number of retrieval responses", stats.UnitDimensionless)
@@ -44,7 +44,7 @@ var (
 	bitswapResponseView = &view.View{
 		Measure:     BitswapResponseCount,
 		Aggregation: view.Count(),
-		TagKeys:     []tag.Key{BitswapTopic},
+		TagKeys:     []tag.Key{BitswapTopic, BitswapDontHaveReason},
 	}
 	bitswapRetreiverRequestView = &view.View{
 		Measure:     BitswapRetrieverRequestCount,
