@@ -50,7 +50,7 @@ func (ee *EstuaryEndpoint) FindCandidates(ctx context.Context, cid cid.Cid) ([]f
 	// Request candidates from endpoint
 	resp, err := http.Get(endpointURL.String())
 	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrEndpointRequestFailed, err)
+		return nil, fmt.Errorf("%w: HTTP request failed: %v", ErrEndpointRequestFailed, err)
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
@@ -67,7 +67,7 @@ func (ee *EstuaryEndpoint) FindCandidates(ctx context.Context, cid cid.Cid) ([]f
 	for _, original := range unfiltered {
 		minerPeer, err := ee.fc.MinerPeer(ctx, original.Miner)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("%w: failed to get miner peer: %v", ErrEndpointRequestFailed, err)
 		}
 		converted = append(converted, filecoin.RetrievalCandidate{
 			MinerPeer: minerPeer,
