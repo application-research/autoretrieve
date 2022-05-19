@@ -156,8 +156,10 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		var ep filecoin.Endpoint
 		switch cfg.EndpointType {
 		case EndpointTypeEstuary:
+			logger.Infof("Using Estuary endpoint type")
 			ep = endpoint.NewEstuaryEndpoint(fc, cfg.EndpointURL)
 		case EndpointTypeIndexer:
+			logger.Infof("Using indexer endpoint type")
 			ep = endpoint.NewIndexerEndpoint(cfg.EndpointURL)
 		default:
 			return nil, errors.New("unrecognized endpoint type")
