@@ -233,6 +233,8 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		return nil, err
 	}
 
+	logger.Infof("Using peer ID: %s", host.ID())
+
 	return &Autoretrieve{
 		host:      host,
 		retriever: retriever,
