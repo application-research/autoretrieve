@@ -9,10 +9,20 @@ import (
 	"os"
 	"os/signal"
 	"path"
+	"path/filepath"
 	"runtime"
 
+	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/metrics"
+	"github.com/dustin/go-humanize"
+	"github.com/ipfs/go-blockservice"
+	"github.com/ipfs/go-cid"
+	flatfs "github.com/ipfs/go-ds-flatfs"
+	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	offline "github.com/ipfs/go-ipfs-exchange-offline"
+	format "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-log/v2"
+	"github.com/ipfs/go-merkledag"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v2"
 )
@@ -81,6 +91,11 @@ func main() {
 			Name:   "print-config",
 			Action: cmdPrintConfig,
 			Usage:  "Print detected config values as autoretrieve sees them",
+		},
+		{
+			Name:   "check-cid",
+			Action: cmdTestBlockstore,
+			Usage:  "Takes a CID argument and tries walking the DAG using the local blockstore",
 		},
 	}
 
@@ -171,6 +186,73 @@ func cmd(cctx *cli.Context) error {
 	<-cctx.Context.Done()
 
 	autoretrieve.Close()
+
+	return nil
+}
+
+func cmdTestBlockstore(cctx *cli.Context) error {
+	// Initialize blockstore manager
+	parseShardFunc, err := flatfs.ParseShardFunc("/repo/flatfs/shard/v1/next-to-last/3")
+	if err != nil {
+		return err
+	}
+
+	blockstoreDatastore, err := flatfs.CreateOrOpen(filepath.Join(dataDirPath(cctx), blockstoreSubdir), parseShardFunc, false)
+	if err != nil {
+		return err
+	}
+
+	blockstore := blockstore.NewBlockstoreNoPrefix(blockstoreDatastore)
+
+	blockManager := blocks.NewManager(blockstore)
+	if err != nil {
+		return err
+	}
+
+	bs := blockservice.New(blockManager, offline.Exchange(blockManager))
+	ds := merkledag.NewDAGService(bs)
+
+	cset := cid.NewSet()
+	c, err := cid.Parse(cctx.Args().First())
+
+	var size int
+	var count int
+	complete := true
+
+	if err := merkledag.Walk(cctx.Context, func(ctx context.Context, c cid.Cid) ([]*format.Link, error) {
+		node, err := ds.Get(cctx.Context, c)
+		if err != nil {
+			return nil, err
+		}
+
+		if c.Type() == cid.Raw {
+			return nil, nil
+		}
+
+		return node.Links(), nil
+	}, c, func(c cid.Cid) bool {
+		blockSize, err := blockManager.GetSize(cctx.Context, c)
+		if err != nil {
+			fmt.Printf("Error getting block size: %v\n", err)
+			complete = false
+			return false
+		}
+
+		size += blockSize
+		count++
+
+		return cset.Visit(c)
+	}); err != nil {
+		fmt.Printf("Failed: %v\n", err)
+	}
+
+	fmt.Printf("Got size %s from %d blocks\n", humanize.IBytes(uint64(size)), count)
+
+	if complete {
+		fmt.Printf("Tree is complete\n")
+	} else {
+		fmt.Printf("Tree is incomplete\n")
+	}
 
 	return nil
 }
