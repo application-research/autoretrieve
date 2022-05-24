@@ -45,7 +45,10 @@ number of outbound streams: %d,
 `
 
 type Autoretrieve struct {
-	host host.Host
+	host      host.Host
+	retriever *filecoin.Retriever
+	provider  *bitswap.Provider
+	apiCloser func()
 }
 
 func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
@@ -69,11 +72,10 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 	}
 
 	// Open Lotus API
-	api, closer, err := lcli.GetGatewayAPI(cctx)
+	api, apiCloser, err := lcli.GetGatewayAPI(cctx)
 	if err != nil {
 		return nil, err
 	}
-	defer closer()
 
 	// Initialize blockstore manager
 	parseShardFunc, err := flatfs.ParseShardFunc("/repo/flatfs/shard/v1/next-to-last/3")
@@ -219,7 +221,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 	}
 
 	// Initialize Bitswap provider
-	_, err = bitswap.NewProvider(
+	provider, err := bitswap.NewProvider(
 		cctx.Context,
 		cfg.ExtractBitswapProviderConfig(cctx.Context),
 		host,
@@ -231,14 +233,20 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		return nil, err
 	}
 
+	logger.Infof("Using peer ID: %s", host.ID())
+
 	return &Autoretrieve{
-		host: host,
+		host:      host,
+		retriever: retriever,
+		provider:  provider,
+		apiCloser: apiCloser,
 	}, nil
 }
 
 // TODO: this function should do a lot more to clean up resources and come to
 // safe stop
 func (autoretrieve *Autoretrieve) Close() {
+	autoretrieve.apiCloser()
 	autoretrieve.host.Close()
 }
 
