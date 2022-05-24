@@ -5,6 +5,7 @@ import (
 
 	"contrib.go.opencensus.io/exporter/prometheus"
 	logging "github.com/ipfs/go-log/v2"
+	promclient "github.com/prometheus/client_golang/prometheus"
 	"go.opencensus.io/stats/view"
 )
 
@@ -19,7 +20,13 @@ func PrometheusHandler(views ...*view.View) http.Handler {
 		logger.Errorf("cannot register metric views: %s", err)
 	}
 
+	registry, ok := promclient.DefaultRegisterer.(*promclient.Registry)
+	if !ok {
+		logger.Warnf("failed to export default prometheus registry; some metrics will be unavailable; unexpected type: %T", promclient.DefaultRegisterer)
+	}
+
 	exp, err := prometheus.NewExporter(prometheus.Options{
+		Registry:  registry,
 		Namespace: "autoretrieve",
 	})
 	if err != nil {
