@@ -332,7 +332,7 @@ func applyConfigCLIOverrides(cctx *cli.Context, cfg *Config) error {
 	}
 
 	if cctx.IsSet("disable-retrievals") {
-		cfg.DisableRetrieval = cctx.Bool("disable-retrievals")
+		cfg.DisableRetrieval = cctx.Bool("disable-retrieval")
 	}
 
 	if cctx.IsSet("log-resource-manager") {
@@ -340,7 +340,7 @@ func applyConfigCLIOverrides(cctx *cli.Context, cfg *Config) error {
 	}
 
 	if cctx.IsSet("log-retrievals") {
-		cfg.LogRetrievals = cctx.Bool("log-retrieval")
+		cfg.LogRetrievals = cctx.Bool("log-retrievals")
 	}
 
 	return nil
