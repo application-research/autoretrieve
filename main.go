@@ -340,7 +340,7 @@ func applyConfigCLIOverrides(cctx *cli.Context, cfg *Config) error {
 	}
 
 	if cctx.IsSet("log-retrievals") {
-		cfg.LogRetrievals = cctx.Bool("log-retrievals")
+		cfg.LogRetrievals = cctx.Bool("log-retrieval")
 	}
 
 	return nil
