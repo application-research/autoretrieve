@@ -331,7 +331,7 @@ func applyConfigCLIOverrides(cctx *cli.Context, cfg *Config) error {
 		cfg.UseFullRT = cctx.Bool("use-fullrt")
 	}
 
-	if cctx.IsSet("disable-retrievals") {
+	if cctx.IsSet("disable-retrieval") {
 		cfg.DisableRetrieval = cctx.Bool("disable-retrieval")
 	}
 
