@@ -215,11 +215,11 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 		switch entry.WantType {
 		case wantTypeHave:
 			callback = func(block blocks.Block) {
-				provider.sendHave(ctx, sender, block)
+				provider.sendHave(context.Background(), sender, block)
 			}
 		case wantTypeBlock:
 			callback = func(block blocks.Block) {
-				provider.sendBlock(ctx, sender, block)
+				provider.sendBlock(context.Background(), sender, block)
 			}
 		}
 
