@@ -334,7 +334,7 @@ func applyConfigCLIOverrides(cctx *cli.Context, cfg *Config) error {
 			return err
 		}
 
-		cfg.RoutingTable = routingTableType
+		cfg.RoutingTableType = routingTableType
 	}
 
 	if cctx.IsSet("disable-retrieval") {

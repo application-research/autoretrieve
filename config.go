@@ -164,7 +164,7 @@ type Config struct {
 	EndpointType       EndpointType             `yaml:"endpoint-type"`
 	EndpointURL        string                   `yaml:"endpoint-url"`
 	MaxBitswapWorkers  uint                     `yaml:"max-bitswap-workers"`
-	RoutingTable       bitswap.RoutingTableType `yaml:"routing-table-type"`
+	RoutingTableType   bitswap.RoutingTableType `yaml:"routing-table-type"`
 	PruneThreshold     ConfigByteCount          `yaml:"prune-threshold"`
 	PinDuration        time.Duration            `yaml:"pin-duration"`
 	LogResourceManager bool                     `yaml:"log-resource-manager"`
@@ -217,7 +217,7 @@ func (cfg *Config) ExtractBitswapProviderConfig(ctx context.Context) bitswap.Pro
 	return bitswap.ProviderConfig{
 		CidBlacklist:      cidListToMap(ctx, cfg.CidBlacklist),
 		MaxBitswapWorkers: cfg.MaxBitswapWorkers,
-		RoutingTable:      cfg.RoutingTable,
+		RoutingTableType:  cfg.RoutingTableType,
 	}
 }
 
@@ -241,6 +241,7 @@ func DefaultConfig() Config {
 		EndpointType:       EndpointTypeIndexer,
 		EndpointURL:        "https://cid.contact",
 		MaxBitswapWorkers:  1,
+		RoutingTableType:   bitswap.RoutingTableTypeDHT,
 		PruneThreshold:     0,
 		PinDuration:        1 * time.Hour,
 		LogResourceManager: false,

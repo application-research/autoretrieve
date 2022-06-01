@@ -103,7 +103,7 @@ func (routingTableType RoutingTableType) MarshalYAML() (interface{}, error) {
 type ProviderConfig struct {
 	CidBlacklist      map[cid.Cid]bool
 	MaxBitswapWorkers uint
-	RoutingTable      RoutingTableType
+	RoutingTableType  RoutingTableType
 }
 
 type Provider struct {
@@ -133,7 +133,7 @@ func NewProvider(
 		dht.BootstrapPeers(dht.GetDefaultBootstrapPeerAddrInfos()...),
 	}
 
-	switch config.RoutingTable {
+	switch config.RoutingTableType {
 	case RoutingTableTypeDisabled:
 	case RoutingTableTypeFull:
 		fullRT, err := fullrt.NewFullRT(host, dht.DefaultPrefix, fullrt.DHTOption(rtCfg...))
