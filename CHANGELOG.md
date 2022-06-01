@@ -3,9 +3,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ## 2022-07-01
 ### Changed
-- Replace flag `--use-fullrt [true|false]` with `--routing-table-type [dht|full|disabled]`
-- Replace YAML option `use-fullrt: [true|false]` with `routing-table-type: [dht|full|disabled]`
-- Replace env var `AUTORETRIEVE_USE_FULLRT=[true|false]` with `AUTORETRIEVE_ROUTING_TABLE_TYPE=[dht|full|disabled]`
+- Flag `--use-fullrt [true|false]` to `--routing-table-type [dht|full|disabled]`
+- YAML option `use-fullrt: [true|false]` to `routing-table-type: [dht|full|disabled]`
+- Env var `AUTORETRIEVE_USE_FULLRT=[true|false]` to `AUTORETRIEVE_ROUTING_TABLE_TYPE=[dht|full|disabled]`
 
 ## feat/reorg-and-config - 2022-04-??
 ### Added
