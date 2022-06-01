@@ -19,4 +19,4 @@ secretGenerator:
 images:
 - name: autoretrieve
   newName: 407967248065.dkr.ecr.us-east-2.amazonaws.com/autoretrieve/autoretrieve # {"$imagepolicy": "autoretrieve:autoretrieve:name"}
-  newTag: 20220601142106-3eac8eb6edcf6dd0d37bf0bc0a59dd3118974f25 # {"$imagepolicy": "autoretrieve:autoretrieve:tag"}
+  newTag: 20220601144115-aa478442de9a43fd041fecb32cd03705bbbd41fb # {"$imagepolicy": "autoretrieve:autoretrieve:tag"}
