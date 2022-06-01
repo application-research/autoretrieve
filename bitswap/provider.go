@@ -2,6 +2,8 @@ package bitswap
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/application-research/autoretrieve/blocks"
@@ -22,6 +24,7 @@ import (
 	"github.com/libp2p/go-libp2p-kad-dht/fullrt"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
+	"gopkg.in/yaml.v3"
 )
 
 var logger = log.Logger("autoretrieve")
@@ -41,10 +44,66 @@ const (
 
 const targetMessageSize = 16384
 
+type RoutingTableType int
+
+const (
+	RoutingTableTypeDisabled RoutingTableType = iota
+	RoutingTableTypeDHT
+	RoutingTableTypeFull
+)
+
+func ParseRoutingTableType(routingTableType string) (RoutingTableType, error) {
+	switch strings.ToLower(strings.TrimSpace(routingTableType)) {
+	case RoutingTableTypeDisabled.String():
+		return RoutingTableTypeDisabled, nil
+	case RoutingTableTypeDHT.String():
+		return RoutingTableTypeDHT, nil
+	case RoutingTableTypeFull.String():
+		return RoutingTableTypeFull, nil
+	default:
+		return 0, fmt.Errorf("unknown routing table type %s", routingTableType)
+	}
+}
+
+func (routingTableType RoutingTableType) String() string {
+	switch routingTableType {
+	case RoutingTableTypeDisabled:
+		return "disabled"
+	case RoutingTableTypeDHT:
+		return "dht"
+	case RoutingTableTypeFull:
+		return "full"
+	default:
+		return fmt.Sprintf("unknown routing table type %d", routingTableType)
+	}
+}
+
+func (routingTableType *RoutingTableType) UnmarshalYAML(value *yaml.Node) error {
+	var str string
+	if err := value.Decode(&str); err != nil {
+		return err
+	}
+
+	_routingTableType, err := ParseRoutingTableType(str)
+	if err != nil {
+		return &yaml.TypeError{
+			Errors: []string{fmt.Sprintf("line %d: %v", value.Line, err.Error())},
+		}
+	}
+
+	*routingTableType = _routingTableType
+
+	return nil
+}
+
+func (routingTableType RoutingTableType) MarshalYAML() (interface{}, error) {
+	return routingTableType.String(), nil
+}
+
 type ProviderConfig struct {
 	CidBlacklist      map[cid.Cid]bool
 	MaxBitswapWorkers uint
-	UseFullRT         bool
+	RoutingTable      RoutingTableType
 }
 
 type Provider struct {
@@ -68,25 +127,23 @@ func NewProvider(
 
 	var routing routing.ContentRouting
 
-	if config.UseFullRT {
-		fullRT, err := fullrt.NewFullRT(host, dht.DefaultPrefix, fullrt.DHTOption(
-			dht.Datastore(datastore),
-			dht.BucketSize(20),
-			dht.BootstrapPeers(dht.GetDefaultBootstrapPeerAddrInfos()...),
-		))
+	rtCfg := []dht.Option{
+		dht.Datastore(datastore),
+		dht.BucketSize(20),
+		dht.BootstrapPeers(dht.GetDefaultBootstrapPeerAddrInfos()...),
+	}
+
+	switch config.RoutingTable {
+	case RoutingTableTypeDisabled:
+	case RoutingTableTypeFull:
+		fullRT, err := fullrt.NewFullRT(host, dht.DefaultPrefix, fullrt.DHTOption(rtCfg...))
 		if err != nil {
 			return nil, err
 		}
 
 		routing = fullRT
-	} else {
-		dht, err := dht.New(
-			ctx,
-			host,
-			dht.Datastore(datastore),
-			dht.BucketSize(20),
-			dht.BootstrapPeers(dht.GetDefaultBootstrapPeerAddrInfos()...),
-		)
+	case RoutingTableTypeDHT:
+		dht, err := dht.New(ctx, host, rtCfg...)
 		if err != nil {
 			return nil, err
 		}
