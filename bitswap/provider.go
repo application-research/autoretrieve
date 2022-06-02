@@ -159,7 +159,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				provider.taskQueue.PushTasks(sender, peertask.Task{
 					Topic:    topicBlock(block),
 					Priority: int(entry.Priority),
-					Work:     message.BlockPresenceSize(entry.Cid),
+					Work:     len(block.RawData()),
 				})
 				continue
 			}
