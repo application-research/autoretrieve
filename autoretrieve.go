@@ -203,15 +203,15 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 					fmt.Printf("\nData transfer status\n\n")
 					fmt.Fprintln(w, dtHeaders)
 					for _, state := range transfers {
-						if state.Status() == datatransfer.Cancelled || state.Status() == datatransfer.Failed {
+						if state.Status == datatransfer.Cancelled || state.Status == datatransfer.Failed {
 							totalFailures++
 							continue
 						}
-						if state.Status() == datatransfer.Completed {
+						if state.Status == datatransfer.Completed {
 							totalSuccesses++
 							continue
 						}
-						fmt.Fprintf(w, dtOutput, state.OtherPeer(), state.BaseCID(), datatransfer.Statuses[state.Status()], state.Received(), state.Message())
+						fmt.Fprintf(w, dtOutput, state.RemotePeer, state.BaseCid, datatransfer.Statuses[state.Status], state.Received, state.Message)
 					}
 					w.Flush()
 					fmt.Printf("\nTotal Successes: %d, Total Failures: %d\n\n", totalSuccesses, totalFailures)
