@@ -125,6 +125,13 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 
 		stats.Record(ctx, metrics.BitswapRequestCount.M(1))
 
+		// We want to skip CIDs in the blacklist, queue DONT_HAVE
+		if provider.config.CidBlacklist[entry.Cid] {
+			logger.Debugf("Replying DONT_HAVE for blacklisted CID: %s", entry.Cid)
+			provider.queueDontHave(ctx, sender, entry, "blacklisted_cid")
+			continue
+		}
+
 		switch entry.WantType {
 		case wantTypeHave:
 			// For WANT_HAVE, just confirm whether it's in the blockstore
