@@ -129,15 +129,15 @@ func (provider *ConfigStorageProvider) UnmarshalYAML(value *yaml.Node) error {
 		return err
 	}
 
-	addr, err := address.NewFromString(str)
+	peerID, err := peer.Decode(str)
 	if err == nil {
-		provider.maybeAddr = addr
+		provider.maybePeer = peerID
 		return nil
 	}
 
-	peerID, err := peer.IDFromString(str)
+	addr, err := address.NewFromString(str)
 	if err == nil {
-		provider.maybePeer = peerID
+		provider.maybeAddr = addr
 		return nil
 	}
 

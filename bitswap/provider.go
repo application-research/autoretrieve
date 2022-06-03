@@ -173,6 +173,17 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 			// ...otherwise, check retrieval candidates for it
 		}
 
+		// If retriever is disabled, nothing we can do, send DONT_HAVE and move
+		// on
+		if provider.retriever == nil {
+			provider.taskQueue.PushTasks(sender, peertask.Task{
+				Topic:    topicDontHave(entry.Cid),
+				Priority: int(entry.Priority),
+				Work:     message.BlockPresenceSize(entry.Cid),
+			})
+			continue
+		}
+
 		// At this point, the blockstore did not have the requested block, so a
 		// retrieval is attempted
 		stats.Record(ctx, metrics.BitswapRetrieverRequestCount.M(1))
@@ -199,6 +210,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 					Priority: int(entry.Priority),
 					Work:     message.BlockPresenceSize(entry.Cid),
 				})
+				provider.signalWork()
 			})
 		case wantTypeBlock:
 			if err := provider.retriever.Request(entry.Cid); err != nil {
@@ -219,6 +231,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 					Priority: int(entry.Priority),
 					Work:     len(block.RawData()),
 				})
+				provider.signalWork()
 			})
 		}
 	}

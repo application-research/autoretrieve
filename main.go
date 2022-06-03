@@ -205,7 +205,7 @@ func cmdTestBlockstore(cctx *cli.Context) error {
 
 	blockstore := blockstore.NewBlockstoreNoPrefix(blockstoreDatastore)
 
-	blockManager := blocks.NewManager(blockstore)
+	blockManager := blocks.NewManager(blockstore, 0)
 	if err != nil {
 		return err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"time"
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
@@ -19,19 +20,30 @@ type Block = blocks.Block
 // events.
 type Manager struct {
 	blockstore.Blockstore
-	readyBlocks chan Block
-	waitList    map[cid.Cid][]func(Block)
-	waitListLk  sync.Mutex
+	readyBlocks     chan Block
+	waitList        map[cid.Cid][]waitListEntry
+	waitListLk      sync.Mutex
+	getAwaitTimeout time.Duration
 }
 
-func NewManager(inner blockstore.Blockstore) *Manager {
+type waitListEntry struct {
+	callback     func(Block)
+	registeredAt time.Time
+}
+
+func NewManager(inner blockstore.Blockstore, getAwaitTimeout time.Duration) *Manager {
 	mgr := &Manager{
 		Blockstore:  inner,
 		readyBlocks: make(chan Block, 10),
-		waitList:    make(map[cid.Cid][]func(Block)),
+		waitList:    make(map[cid.Cid][]waitListEntry),
 	}
 
-	go mgr.pollNotifyWaitCallbacks()
+	go mgr.startPollReadyBlocks()
+
+	// Only do cleanups if a timeout is actually set
+	if getAwaitTimeout != 0 {
+		go mgr.startPollCleanup()
+	}
 
 	return mgr
 }
@@ -51,7 +63,10 @@ func (mgr *Manager) GetAwait(ctx context.Context, cid cid.Cid, callback func(Blo
 			return err
 		}
 
-		mgr.waitList[cid] = append(mgr.waitList[cid], callback)
+		mgr.waitList[cid] = append(mgr.waitList[cid], waitListEntry{
+			callback:     callback,
+			registeredAt: time.Now(),
+		})
 
 		mgr.waitListLk.Unlock()
 
@@ -102,7 +117,7 @@ func (mgr *Manager) PutMany(ctx context.Context, blocks []blocks.Block) error {
 	return nil
 }
 
-func (mgr *Manager) pollNotifyWaitCallbacks() {
+func (mgr *Manager) startPollReadyBlocks() {
 	for block := range mgr.readyBlocks {
 		mgr.notifyWaitCallbacks(block)
 	}
@@ -112,11 +127,35 @@ func (mgr *Manager) notifyWaitCallbacks(block Block) {
 	cid := block.Cid()
 
 	mgr.waitListLk.Lock()
-	if blockChans, ok := mgr.waitList[cid]; ok {
+	if entries, ok := mgr.waitList[cid]; ok {
 		delete(mgr.waitList, cid)
-		for _, callback := range blockChans {
-			callback(block)
+		for _, entry := range entries {
+			entry.callback(block)
 		}
 	}
 	mgr.waitListLk.Unlock()
+}
+
+func (mgr *Manager) startPollCleanup() {
+	for range time.Tick(time.Millisecond * 100) {
+		for cid := range mgr.waitList {
+			// For each element in the slice for this CID...
+			for i, entry := range mgr.waitList[cid] {
+				// ...check if it's timed out...
+				if time.Since(entry.registeredAt) > mgr.getAwaitTimeout {
+					// ...and if so, delete this element by replacing it with
+					// the last element of the slice and shrinking the length by
+					// 1
+					mgr.waitList[cid][i] = mgr.waitList[cid][len(mgr.waitList[cid])-1]
+					mgr.waitList[cid] = mgr.waitList[cid][:len(mgr.waitList[cid])-1]
+				}
+			}
+
+			// If the slice is empty now, remove it entirely from the waitList
+			// map
+			if len(mgr.waitList[cid]) == 0 {
+				delete(mgr.waitList, cid)
+			}
+		}
+	}
 }

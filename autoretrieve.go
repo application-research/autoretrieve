@@ -104,7 +104,8 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		logger.Warnf("No prune threshold provided, blockstore garbage collection will not be performed")
 	}
 
-	blockManager := blocks.NewManager(blockstore)
+	// TODO: make configurable
+	blockManager := blocks.NewManager(blockstore, time.Minute*10)
 	if err != nil {
 		return nil, err
 	}
