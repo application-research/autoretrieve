@@ -23,6 +23,7 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/fullrt"
 	"go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 )
 
 var logger = log.Logger("autoretrieve")
@@ -138,11 +139,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 			// If the block was found, queue HAVE and move on...
 			if has {
 				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
-				provider.taskQueue.PushTasks(sender, peertask.Task{
-					Topic:    topicHave(entry.Cid),
-					Priority: int(entry.Priority),
-					Work:     message.BlockPresenceSize(entry.Cid),
-				})
+				provider.queueHave(ctx, sender, entry, entry.Cid)
 				continue
 			}
 
@@ -162,11 +159,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 			// on...
 			if !errors.Is(err, blockstore.ErrNotFound) {
 				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
-				provider.taskQueue.PushTasks(sender, peertask.Task{
-					Topic:    topicBlock(block),
-					Priority: int(entry.Priority),
-					Work:     len(block.RawData()),
-				})
+				provider.queueBlock(ctx, sender, entry, block)
 				continue
 			}
 
@@ -176,61 +169,41 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 		// If retriever is disabled, nothing we can do, send DONT_HAVE and move
 		// on
 		if provider.retriever == nil {
-			provider.taskQueue.PushTasks(sender, peertask.Task{
-				Topic:    topicDontHave(entry.Cid),
-				Priority: int(entry.Priority),
-				Work:     message.BlockPresenceSize(entry.Cid),
-			})
+			provider.queueDontHave(ctx, sender, entry, "disabled_retriever")
 			continue
 		}
 
 		// At this point, the blockstore did not have the requested block, so a
 		// retrieval is attempted
+
+		// Record that a retrieval is required
 		stats.Record(ctx, metrics.BitswapRetrieverRequestCount.M(1))
+
 		switch entry.WantType {
 		case wantTypeHave:
 			// TODO: for WANT_HAVE, just check if there's a candidate, we
 			// probably don't have to actually do the retrieval yet
-
 			if err := provider.retriever.Request(entry.Cid); err != nil {
 				// If no candidates were found, there's nothing that can be done, so
 				// queue DONT_HAVE and move on
-				provider.taskQueue.PushTasks(sender, peertask.Task{
-					Topic:    topicDontHave(entry.Cid),
-					Priority: int(entry.Priority),
-					Work:     message.BlockPresenceSize(entry.Cid),
-				})
+				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
 				continue
 			}
 
 			provider.blockManager.GetAwait(ctx, entry.Cid, func(block blocks.Block) {
-				stats.Record(context.Background(), metrics.BitswapResponseCount.M(1))
-				provider.taskQueue.PushTasks(sender, peertask.Task{
-					Topic:    topicHave(block.Cid()),
-					Priority: int(entry.Priority),
-					Work:     message.BlockPresenceSize(entry.Cid),
-				})
+				provider.queueHave(context.Background(), sender, entry, block.Cid())
 				provider.signalWork()
 			})
 		case wantTypeBlock:
 			if err := provider.retriever.Request(entry.Cid); err != nil {
 				// If no candidates were found, there's nothing that can be done, so
 				// queue DONT_HAVE and move on
-				provider.taskQueue.PushTasks(sender, peertask.Task{
-					Topic:    topicDontHave(entry.Cid),
-					Priority: int(entry.Priority),
-					Work:     message.BlockPresenceSize(entry.Cid),
-				})
+				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
 				continue
 			}
 
 			provider.blockManager.GetAwait(ctx, entry.Cid, func(block blocks.Block) {
-				stats.Record(context.Background(), metrics.BitswapResponseCount.M(1))
-				provider.taskQueue.PushTasks(sender, peertask.Task{
-					Topic:    topicBlock(block),
-					Priority: int(entry.Priority),
-					Work:     len(block.RawData()),
-				})
+				provider.queueBlock(context.Background(), sender, entry, block)
 				provider.signalWork()
 			})
 		}
@@ -292,4 +265,46 @@ func (provider *Provider) runWorker() {
 
 		provider.taskQueue.TasksDone(peer, tasks...)
 	}
+}
+
+// Adds a BLOCK task to the task queue
+func (provider *Provider) queueBlock(ctx context.Context, sender peer.ID, entry message.Entry, block blocks.Block) {
+	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "BLOCK"))
+
+	provider.taskQueue.PushTasks(sender, peertask.Task{
+		Topic:    topicBlock(block),
+		Priority: int(entry.Priority),
+		Work:     len(block.RawData()),
+	})
+
+	// Record response metric
+	stats.Record(ctx, metrics.BitswapResponseCount.M(1))
+}
+
+// Adds a DONT_HAVE task to the task queue
+func (provider *Provider) queueDontHave(ctx context.Context, sender peer.ID, entry message.Entry, reason string) {
+	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "DONT_HAVE"), tag.Insert(metrics.BitswapDontHaveReason, reason))
+
+	provider.taskQueue.PushTasks(sender, peertask.Task{
+		Topic:    topicDontHave(entry.Cid),
+		Priority: int(entry.Priority),
+		Work:     message.BlockPresenceSize(entry.Cid),
+	})
+
+	// Record response metric
+	stats.Record(ctx, metrics.BitswapResponseCount.M(1))
+}
+
+// Adds a HAVE task to the task queue
+func (provider *Provider) queueHave(ctx context.Context, sender peer.ID, entry message.Entry, haveCid cid.Cid) {
+	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "HAVE"))
+
+	provider.taskQueue.PushTasks(sender, peertask.Task{
+		Topic:    topicHave(haveCid),
+		Priority: int(entry.Priority),
+		Work:     message.BlockPresenceSize(entry.Cid),
+	})
+
+	// Record response metric
+	stats.Record(ctx, metrics.BitswapResponseCount.M(1))
 }
