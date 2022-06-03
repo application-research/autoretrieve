@@ -7,6 +7,7 @@ import (
 
 	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/filecoin"
+	"github.com/application-research/autoretrieve/metrics"
 	"github.com/ipfs/go-bitswap/message"
 	bitswap_message_pb "github.com/ipfs/go-bitswap/message/pb"
 	"github.com/ipfs/go-bitswap/network"
@@ -21,6 +22,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/routing"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/fullrt"
+	"go.opencensus.io/stats"
 )
 
 var logger = log.Logger("autoretrieve")
@@ -120,6 +122,8 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 			continue
 		}
 
+		stats.Record(ctx, metrics.BitswapRequestCount.M(1))
+
 		switch entry.WantType {
 		case wantTypeHave:
 			// For WANT_HAVE, just confirm whether it's in the blockstore
@@ -133,6 +137,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 
 			// If the block was found, queue HAVE and move on...
 			if has {
+				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
 				provider.taskQueue.PushTasks(sender, peertask.Task{
 					Topic:    topicHave(entry.Cid),
 					Priority: int(entry.Priority),
@@ -156,6 +161,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 			// As long as no not found error was hit, queue the block and move
 			// on...
 			if !errors.Is(err, blockstore.ErrNotFound) {
+				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
 				provider.taskQueue.PushTasks(sender, peertask.Task{
 					Topic:    topicBlock(block),
 					Priority: int(entry.Priority),
@@ -169,6 +175,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 
 		// At this point, the blockstore did not have the requested block, so a
 		// retrieval is attempted
+		stats.Record(ctx, metrics.BitswapRetrieverRequestCount.M(1))
 		switch entry.WantType {
 		case wantTypeHave:
 			// TODO: for WANT_HAVE, just check if there's a candidate, we
@@ -186,6 +193,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 			}
 
 			provider.blockManager.GetAwait(ctx, entry.Cid, func(block blocks.Block) {
+				stats.Record(context.Background(), metrics.BitswapResponseCount.M(1))
 				provider.taskQueue.PushTasks(sender, peertask.Task{
 					Topic:    topicHave(block.Cid()),
 					Priority: int(entry.Priority),
@@ -205,6 +213,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 			}
 
 			provider.blockManager.GetAwait(ctx, entry.Cid, func(block blocks.Block) {
+				stats.Record(context.Background(), metrics.BitswapResponseCount.M(1))
 				provider.taskQueue.PushTasks(sender, peertask.Task{
 					Topic:    topicBlock(block),
 					Priority: int(entry.Priority),
