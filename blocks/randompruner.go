@@ -144,19 +144,19 @@ func (pruner *RandomPruner) Poll(ctx context.Context) {
 		size, err := pruner.datastore.DiskUsage(ctx)
 		if err != nil {
 			log.Errorf("Pruner could not get blockstore disk usage: %v", err)
-		}
-
-		var diff uint64
-		if size > pruner.size {
-			diff = size - pruner.size
 		} else {
-			diff = pruner.size - size
-		}
-		if diff > 1<<30 {
-			log.Warnf("Large mismatch between pruner's tracked size (%v) and datastore's reported disk usage (%v)", pruner.size, size)
-		}
+			var diff uint64
+			if size > pruner.size {
+				diff = size - pruner.size
+			} else {
+				diff = pruner.size - size
+			}
+			if diff > 1<<30 {
+				log.Warnf("Large mismatch between pruner's tracked size (%v) and datastore's reported disk usage (%v)", pruner.size, size)
+			}
 
-		pruner.size = size
+			pruner.size = size
+		}
 	}
 
 	if pruner.size >= pruner.threshold {

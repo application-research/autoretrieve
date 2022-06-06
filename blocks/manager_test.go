@@ -16,7 +16,7 @@ func TestPutBlock(t *testing.T) {
 	ctx := context.Background()
 	ds := sync.MutexWrap(datastore.NewMapDatastore())
 	bs := blockstore.NewBlockstore(ds)
-	manager := NewManager(bs)
+	manager := NewManager(bs, 0)
 	blockGenerator := blocksutil.NewBlockGenerator()
 	blk := blockGenerator.Next()
 	receivedBlk := make(chan cid.Cid)
@@ -45,7 +45,7 @@ func TestPutMany(t *testing.T) {
 	ctx := context.Background()
 	ds := sync.MutexWrap(datastore.NewMapDatastore())
 	bs := blockstore.NewBlockstore(ds)
-	manager := NewManager(bs)
+	manager := NewManager(bs, 0)
 	blockGenerator := blocksutil.NewBlockGenerator()
 	var blks []blocks.Block
 	for i := 0; i < 20; i++ {

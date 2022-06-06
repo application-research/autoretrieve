@@ -1,5 +1,5 @@
 # Extern dependencies commit hashes
-filecoin-ffi-commit = 8e377f906ae40239
+filecoin-ffi-commit = 5d00bb4365a97890
 
 all: autoretrieve
 .PHONY: all

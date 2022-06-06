@@ -129,15 +129,15 @@ func (provider *ConfigStorageProvider) UnmarshalYAML(value *yaml.Node) error {
 		return err
 	}
 
-	addr, err := address.NewFromString(str)
+	peerID, err := peer.Decode(str)
 	if err == nil {
-		provider.maybeAddr = addr
+		provider.maybePeer = peerID
 		return nil
 	}
 
-	peerID, err := peer.IDFromString(str)
+	addr, err := address.NewFromString(str)
 	if err == nil {
-		provider.maybePeer = peerID
+		provider.maybeAddr = addr
 		return nil
 	}
 
@@ -161,18 +161,18 @@ type MinerConfig struct {
 
 // All config values should be safe to leave uninitialized
 type Config struct {
-	EndpointType       EndpointType            `yaml:"endpoint-type"`
-	EndpointURL        string                  `yaml:"endpoint-url"`
-	MaxBitswapWorkers  uint                    `yaml:"max-bitswap-workers"`
-	UseFullRT          bool                    `yaml:"use-fullrt"`
-	PruneThreshold     ConfigByteCount         `yaml:"prune-threshold"`
-	PinDuration        time.Duration           `yaml:"pin-duration"`
-	LogResourceManager bool                    `yaml:"log-resource-manager"`
-	LogRetrievals      bool                    `yaml:"log-retrieval-stats"`
-	DisableRetrieval   bool                    `yaml:"disable-retrieval"`
-	CidBlacklist       []cid.Cid               `yaml:"cid-blacklist"`
-	MinerBlacklist     []ConfigStorageProvider `yaml:"miner-blacklist"`
-	MinerWhitelist     []ConfigStorageProvider `yaml:"miner-whitelist"`
+	EndpointType       EndpointType             `yaml:"endpoint-type"`
+	EndpointURL        string                   `yaml:"endpoint-url"`
+	MaxBitswapWorkers  uint                     `yaml:"max-bitswap-workers"`
+	RoutingTableType   bitswap.RoutingTableType `yaml:"routing-table-type"`
+	PruneThreshold     ConfigByteCount          `yaml:"prune-threshold"`
+	PinDuration        time.Duration            `yaml:"pin-duration"`
+	LogResourceManager bool                     `yaml:"log-resource-manager"`
+	LogRetrievals      bool                     `yaml:"log-retrieval-stats"`
+	DisableRetrieval   bool                     `yaml:"disable-retrieval"`
+	CidBlacklist       []cid.Cid                `yaml:"cid-blacklist"`
+	MinerBlacklist     []ConfigStorageProvider  `yaml:"miner-blacklist"`
+	MinerWhitelist     []ConfigStorageProvider  `yaml:"miner-whitelist"`
 
 	DefaultMinerConfig MinerConfig                           `yaml:"default-miner-config"`
 	MinerConfigs       map[ConfigStorageProvider]MinerConfig `yaml:"miner-configs"`
@@ -217,7 +217,7 @@ func (cfg *Config) ExtractBitswapProviderConfig(ctx context.Context) bitswap.Pro
 	return bitswap.ProviderConfig{
 		CidBlacklist:      cidListToMap(ctx, cfg.CidBlacklist),
 		MaxBitswapWorkers: cfg.MaxBitswapWorkers,
-		UseFullRT:         cfg.UseFullRT,
+		RoutingTableType:  cfg.RoutingTableType,
 	}
 }
 
@@ -241,6 +241,7 @@ func DefaultConfig() Config {
 		EndpointType:       EndpointTypeIndexer,
 		EndpointURL:        "https://cid.contact",
 		MaxBitswapWorkers:  1,
+		RoutingTableType:   bitswap.RoutingTableTypeDHT,
 		PruneThreshold:     0,
 		PinDuration:        1 * time.Hour,
 		LogResourceManager: false,

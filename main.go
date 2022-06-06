@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/application-research/autoretrieve/bitswap"
 	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/metrics"
 	"github.com/dustin/go-humanize"
@@ -62,10 +63,10 @@ func main() {
 			Usage:   "Whether to disable the retriever module, for testing provider only",
 			EnvVars: []string{"AUTORETRIEVE_DISABLE_RETRIEVAL"},
 		},
-		&cli.BoolFlag{
-			Name:    "use-fullrt",
-			Usage:   "Whether to use the full routing table instead of DHT",
-			EnvVars: []string{"AUTORETRIEVE_USE_FULLRT"},
+		&cli.StringFlag{
+			Name:    "routing-table-type",
+			Usage:   "[dht|fullrt|disabled]",
+			EnvVars: []string{"AUTORETRIEVE_ROUTING_TABLE_TYPE"},
 		},
 		&cli.BoolFlag{
 			Name:    "log-resource-manager",
@@ -204,7 +205,7 @@ func cmdTestBlockstore(cctx *cli.Context) error {
 
 	blockstore := blockstore.NewBlockstoreNoPrefix(blockstoreDatastore)
 
-	blockManager := blocks.NewManager(blockstore)
+	blockManager := blocks.NewManager(blockstore, 0)
 	if err != nil {
 		return err
 	}
@@ -327,12 +328,17 @@ func applyConfigCLIOverrides(cctx *cli.Context, cfg *Config) error {
 		cfg.EndpointURL = cctx.String("endpoint-url")
 	}
 
-	if cctx.IsSet("use-fullrt") {
-		cfg.UseFullRT = cctx.Bool("use-fullrt")
+	if cctx.IsSet("routing-table-type") {
+		routingTableType, err := bitswap.ParseRoutingTableType(cctx.String("routing-table-type"))
+		if err != nil {
+			return err
+		}
+
+		cfg.RoutingTableType = routingTableType
 	}
 
-	if cctx.IsSet("disable-retrievals") {
-		cfg.DisableRetrieval = cctx.Bool("disable-retrievals")
+	if cctx.IsSet("disable-retrieval") {
+		cfg.DisableRetrieval = cctx.Bool("disable-retrieval")
 	}
 
 	if cctx.IsSet("log-resource-manager") {
