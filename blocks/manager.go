@@ -145,9 +145,10 @@ func (mgr *Manager) startPollCleanup() {
 				if time.Since(entry.registeredAt) > mgr.getAwaitTimeout {
 					// ...and if so, delete this element by replacing it with
 					// the last element of the slice and shrinking the length by
-					// 1
+					// 1, and step the index back
 					mgr.waitList[cid][i] = mgr.waitList[cid][len(mgr.waitList[cid])-1]
 					mgr.waitList[cid] = mgr.waitList[cid][:len(mgr.waitList[cid])-1]
+					i--
 				}
 			}
 
