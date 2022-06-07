@@ -3,6 +3,7 @@ package blocks
 import (
 	"context"
 	"testing"
+	"time"
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
@@ -75,5 +76,38 @@ func TestPutMany(t *testing.T) {
 			t.Fatalf("received error getting block: %s", err)
 		case <-receivedBlocks:
 		}
+	}
+}
+
+func TestCleanup(t *testing.T) {
+	ctx := context.Background()
+	ds := sync.MutexWrap(datastore.NewMapDatastore())
+	bs := blockstore.NewBlockstore(ds)
+	manager := NewManager(bs, time.Second)
+
+	testCount := 1000000
+
+	gen := blocksutil.NewBlockGenerator()
+	for i := 0; i < testCount; i++ {
+		cid := gen.Next().Cid()
+		manager.GetAwait(ctx, cid, func(b blocks.Block) { t.Fatalf("This should not happen") })
+	}
+
+	// manager.waitListLk.Lock()
+	// addedCount := len(manager.waitList)
+	// manager.waitListLk.Unlock()
+
+	// if addedCount != testCount {
+	// 	t.Fatalf("Only %d wait callbacks got registered", addedCount)
+	// }
+
+	time.Sleep(time.Second * 2)
+
+	manager.waitListLk.Lock()
+	cleanedCount := len(manager.waitList)
+	manager.waitListLk.Unlock()
+
+	if cleanedCount != 0 {
+		t.Fatalf("%d block wait callbacks were still present after cleanup deadline", cleanedCount)
 	}
 }

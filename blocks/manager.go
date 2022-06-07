@@ -137,12 +137,13 @@ func (mgr *Manager) notifyWaitCallbacks(block Block) {
 }
 
 func (mgr *Manager) startPollCleanup() {
-	for range time.Tick(time.Millisecond * 100) {
+	for range time.Tick(time.Second * 1) {
+		mgr.waitListLk.Lock()
 		for cid := range mgr.waitList {
 			// For each element in the slice for this CID...
-			for i, entry := range mgr.waitList[cid] {
+			for i := 0; i < len(mgr.waitList[cid]); i++ {
 				// ...check if it's timed out...
-				if time.Since(entry.registeredAt) > mgr.getAwaitTimeout {
+				if time.Since(mgr.waitList[cid][i].registeredAt) > mgr.getAwaitTimeout {
 					// ...and if so, delete this element by replacing it with
 					// the last element of the slice and shrinking the length by
 					// 1, and step the index back
@@ -158,5 +159,6 @@ func (mgr *Manager) startPollCleanup() {
 				delete(mgr.waitList, cid)
 			}
 		}
+		mgr.waitListLk.Unlock()
 	}
 }
