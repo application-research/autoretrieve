@@ -1,6 +1,6 @@
 # Autoretrieve
 
-Autoretrieve's purpose is to make content stored on Filecoin Graphsync available over IPFS. 
+Autoretrieve is a standalone gateway server / Bitswap provider that bridges Filecoin Graphsync content over to Bitswap clients. 
 
 When a Bitswap client requests data from Autoretrieve, Autoretrieve asks either Estuary or an STI indexer which Filecoin service providers are hosting it, starts a retrieval deal with a selected SP, and streams the incoming blocks to the Bitswap client.
 
