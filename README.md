@@ -1,7 +1,8 @@
 # Autoretrieve
 
-Serve filecoin data to bitswap clients using retrieval info queried from Estuary
-or indexers.
+Autoretrieve's purpose is to make content stored on Filecoin Graphsync available over IPFS. 
+
+When a Bitswap client requests data from Autoretrieve, Autoretrieve asks either Estuary or an STI indexer which Filecoin service providers are hosting it, starts a retrieval deal with a selected SP, and streams the incoming blocks to the Bitswap client.
 
 ## Usage
 
@@ -40,7 +41,7 @@ Configurations are applied in the following order, from least to most important:
 endpoint-type: indexer # indexer | estuary
 endpoint-url: https://cid.contact # for estuary endpoint-type: https://api.estuary.tech/retrieval-candidates
 max-bitswap-workers: 1
-use-fullrt: false
+routing-table-type: dht
 prune-threshold: 1GiB # 1000000000, 1 GB, etc. Uses go-humanize for parsing. Table of valid byte sizes can be found here: https://github.com/dustin/go-humanize/blob/v1.0.0/bytes.go#L34-L62
 pin-duration: 1h # 1h30m, etc.
 log-resource-manager: false
@@ -78,15 +79,16 @@ USAGE:
 COMMANDS:
    gen-config    Generate a new config with default values
    print-config  Print detected config values as autoretrieve sees them
+   check-cid     Takes a CID argument and tries walking the DAG using the local blockstore
    help, h       Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --data-dir value        (default: "$HOME/.autoretrieve") [$AUTORETRIEVE_DATA_DIR]
-   --endpoint-url value    Indexer or Estuary endpoint to get retrieval candidates from (default: "https://cid.contact") [$AUTORETRIEVE_ENDPOINT_URL]
-   --endpoint-type value   Type of endpoint for finding data (valid values are "estuary" and "indexer") (default: "indexer") [$AUTORETRIEVE_ENDPOINT_TYPE]
-   --disable-retrieval     Whether to disable the retriever module, for testing provider only (default: false) [$AUTORETRIEVE_DISABLE_RETRIEVAL]
-   --use-fullrt            Whether to use the full routing table instead of DHT (default: false) [$AUTORETRIEVE_USE_FULLRT]
-   --log-resource-manager  Whether to present output about the current state of the libp2p resource manager (default: false) [$AUTORETRIEVE_LOG_RESOURCE_MANAGER]
-   --log-retrievals        Whether to present periodic output about the progress of retrievals (default: false) [$AUTORETRIEVE_LOG_RETRIEVALS]
-   --help, -h              show help (default: false)
+   --data-dir value             [$AUTORETRIEVE_DATA_DIR]
+   --endpoint-url value        Indexer or Estuary endpoint to get retrieval candidates from [$AUTORETRIEVE_ENDPOINT_URL]
+   --endpoint-type value       Type of endpoint for finding data (valid values are "estuary" and "indexer") [$AUTORETRIEVE_ENDPOINT_TYPE]
+   --disable-retrieval         Whether to disable the retriever module, for testing provider only (default: false) [$AUTORETRIEVE_DISABLE_RETRIEVAL]
+   --routing-table-type value  [dht|fullrt|disabled] [$AUTORETRIEVE_ROUTING_TABLE_TYPE]
+   --log-resource-manager      Whether to present output about the current state of the libp2p resource manager (default: false) [$AUTORETRIEVE_LOG_RESOURCE_MANAGER]
+   --log-retrievals            Whether to present periodic output about the progress of retrievals (default: false) [$AUTORETRIEVE_LOG_RETRIEVALS]
+   --help, -h                  show help (default: false)
 ```
