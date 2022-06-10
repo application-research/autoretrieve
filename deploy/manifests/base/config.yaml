@@ -1,5 +1,7 @@
-endpoint-type: indexer
-endpoint-url: https://cid.contact
+advertise-endpoint-url: ""
+advertise-token: ""
+lookup-endpoint-type: indexer
+lookup-endpoint-url: https://cid.contact
 max-bitswap-workers: 1
 routing-table-type: dht
 prune-threshold: 45 GB

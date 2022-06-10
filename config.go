@@ -161,18 +161,20 @@ type MinerConfig struct {
 
 // All config values should be safe to leave uninitialized
 type Config struct {
-	EndpointType       EndpointType             `yaml:"endpoint-type"`
-	EndpointURL        string                   `yaml:"endpoint-url"`
-	MaxBitswapWorkers  uint                     `yaml:"max-bitswap-workers"`
-	RoutingTableType   bitswap.RoutingTableType `yaml:"routing-table-type"`
-	PruneThreshold     ConfigByteCount          `yaml:"prune-threshold"`
-	PinDuration        time.Duration            `yaml:"pin-duration"`
-	LogResourceManager bool                     `yaml:"log-resource-manager"`
-	LogRetrievals      bool                     `yaml:"log-retrieval-stats"`
-	DisableRetrieval   bool                     `yaml:"disable-retrieval"`
-	CidBlacklist       []cid.Cid                `yaml:"cid-blacklist"`
-	MinerBlacklist     []ConfigStorageProvider  `yaml:"miner-blacklist"`
-	MinerWhitelist     []ConfigStorageProvider  `yaml:"miner-whitelist"`
+	AdvertiseEndpointURL string                   `yaml:"advertise-endpoint-url"`
+	AdvertiseToken       string                   `yaml:"advertise-token"`
+	LookupEndpointType   EndpointType             `yaml:"lookup-endpoint-type"`
+	LookupEndpointURL    string                   `yaml:"lookup-endpoint-url"`
+	MaxBitswapWorkers    uint                     `yaml:"max-bitswap-workers"`
+	RoutingTableType     bitswap.RoutingTableType `yaml:"routing-table-type"`
+	PruneThreshold       ConfigByteCount          `yaml:"prune-threshold"`
+	PinDuration          time.Duration            `yaml:"pin-duration"`
+	LogResourceManager   bool                     `yaml:"log-resource-manager"`
+	LogRetrievals        bool                     `yaml:"log-retrieval-stats"`
+	DisableRetrieval     bool                     `yaml:"disable-retrieval"`
+	CidBlacklist         []cid.Cid                `yaml:"cid-blacklist"`
+	MinerBlacklist       []ConfigStorageProvider  `yaml:"miner-blacklist"`
+	MinerWhitelist       []ConfigStorageProvider  `yaml:"miner-whitelist"`
 
 	DefaultMinerConfig MinerConfig                           `yaml:"default-miner-config"`
 	MinerConfigs       map[ConfigStorageProvider]MinerConfig `yaml:"miner-configs"`
@@ -222,7 +224,7 @@ func (cfg *Config) ExtractBitswapProviderConfig(ctx context.Context) bitswap.Pro
 }
 
 func LoadConfig(path string) (Config, error) {
-	var config Config
+	config := DefaultConfig()
 
 	bytes, err := os.ReadFile(path)
 	if err != nil {
@@ -238,8 +240,8 @@ func LoadConfig(path string) (Config, error) {
 
 func DefaultConfig() Config {
 	return Config{
-		EndpointType:       EndpointTypeIndexer,
-		EndpointURL:        "https://cid.contact",
+		LookupEndpointType: EndpointTypeIndexer,
+		LookupEndpointURL:  "https://cid.contact",
 		MaxBitswapWorkers:  1,
 		RoutingTableType:   bitswap.RoutingTableTypeDHT,
 		PruneThreshold:     0,

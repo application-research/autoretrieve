@@ -49,14 +49,14 @@ func main() {
 			EnvVars: []string{"AUTORETRIEVE_DATA_DIR"},
 		},
 		&cli.StringFlag{
-			Name:    "endpoint-url",
+			Name:    "lookup-endpoint-url",
 			Usage:   "Indexer or Estuary endpoint to get retrieval candidates from",
-			EnvVars: []string{"AUTORETRIEVE_ENDPOINT_URL"},
+			EnvVars: []string{"AUTORETRIEVE_LOOKUP_ENDPOINT_URL"},
 		},
 		&cli.StringFlag{
-			Name:    "endpoint-type",
+			Name:    "lookup-endpoint-type",
 			Usage:   "Type of endpoint for finding data (valid values are \"estuary\" and \"indexer\")",
-			EnvVars: []string{"AUTORETRIEVE_ENDPOINT_TYPE"},
+			EnvVars: []string{"AUTORETRIEVE_LOOKUP_ENDPOINT_TYPE"},
 		},
 		&cli.BoolFlag{
 			Name:    "disable-retrieval",
@@ -315,17 +315,17 @@ func fullConfigPath(cctx *cli.Context) string {
 
 // Updates a file-loaded config using the args passed in through CLI
 func applyConfigCLIOverrides(cctx *cli.Context, cfg *Config) error {
-	if cctx.IsSet("endpoint-type") {
-		endpointType, err := ParseEndpointType(cctx.String("endpoint-type"))
+	if cctx.IsSet("lookup-endpoint-type") {
+		lookupEndpointType, err := ParseEndpointType(cctx.String("lookup-endpoint-type"))
 		if err != nil {
 			return err
 		}
 
-		cfg.EndpointType = endpointType
+		cfg.LookupEndpointType = lookupEndpointType
 	}
 
-	if cctx.IsSet("endpoint-url") {
-		cfg.EndpointURL = cctx.String("endpoint-url")
+	if cctx.IsSet("lookup-endpoint-url") {
+		cfg.LookupEndpointURL = cctx.String("lookup-endpoint-url")
 	}
 
 	if cctx.IsSet("routing-table-type") {

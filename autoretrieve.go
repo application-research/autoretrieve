@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"text/tabwriter"
@@ -157,13 +160,13 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 	var retriever *filecoin.Retriever
 	if !cfg.DisableRetrieval {
 		var ep filecoin.Endpoint
-		switch cfg.EndpointType {
+		switch cfg.LookupEndpointType {
 		case EndpointTypeEstuary:
 			logger.Infof("Using Estuary endpoint type")
-			ep = endpoint.NewEstuaryEndpoint(fc, cfg.EndpointURL)
+			ep = endpoint.NewEstuaryEndpoint(fc, cfg.LookupEndpointURL)
 		case EndpointTypeIndexer:
 			logger.Infof("Using indexer endpoint type")
-			ep = endpoint.NewIndexerEndpoint(cfg.EndpointURL)
+			ep = endpoint.NewIndexerEndpoint(cfg.LookupEndpointURL)
 		default:
 			return nil, errors.New("unrecognized endpoint type")
 		}
@@ -232,6 +235,28 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 	)
 	if err != nil {
 		return nil, err
+	}
+
+	// Start Estuary heartbeat goroutine if an endpoint was specified
+	if cfg.AdvertiseEndpointURL != "" {
+		_, err := url.Parse(cfg.AdvertiseEndpointURL)
+		if err != nil {
+			return nil, fmt.Errorf("could not parse advertise endpoint URL: %w", err)
+		}
+
+		go func() {
+			for range time.Tick(time.Hour * 6) {
+				req, err := http.NewRequest("GET", cfg.AdvertiseEndpointURL, bytes.NewBuffer(nil))
+				if err != nil {
+					logger.Errorf("Failed to create Estuary heartbeat message: %v", err)
+				}
+
+				req.Header.Set("Authorization", cfg.AdvertiseToken)
+				if _, err := http.DefaultClient.Do(req); err != nil {
+					logger.Errorf("Failed to send Estuary heartbeat message: %v", err)
+				}
+			}
+		}()
 	}
 
 	logger.Infof("Using peer ID: %s", host.ID())
