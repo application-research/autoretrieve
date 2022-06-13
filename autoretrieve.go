@@ -251,7 +251,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 					logger.Errorf("Failed to create Estuary heartbeat message: %v", err)
 				}
 
-				req.Header.Set("Authorization", cfg.AdvertiseToken)
+				req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.AdvertiseToken))
 				if _, err := http.DefaultClient.Do(req); err != nil {
 					logger.Errorf("Failed to send Estuary heartbeat message: %v", err)
 				}
