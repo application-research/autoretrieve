@@ -264,13 +264,16 @@ func cmdGenConfig(cctx *cli.Context) error {
 		return err
 	}
 
-	WriteConfig(cfg, fullConfigPath(cctx))
+	cfgPath := fullConfigPath(cctx)
+	fmt.Printf("Writing config to '%s'\n", cfgPath)
+	WriteConfig(cfg, cfgPath)
 
 	return nil
 }
 
 func cmdPrintConfig(cctx *cli.Context) error {
-	cfg, err := LoadConfig(fullConfigPath(cctx))
+	cfgPath := fullConfigPath(cctx)
+	cfg, err := LoadConfig(cfgPath)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			fmt.Printf("NOTE: no config file found, using defaults; run autoretrieve or use the gen-config subcommand to generate one\n-----\n")
@@ -288,6 +291,8 @@ func cmdPrintConfig(cctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
+
+	fmt.Printf("Reading config from '%s'\n", cfgPath)
 
 	fmt.Printf("%s\n", string(bytes))
 
