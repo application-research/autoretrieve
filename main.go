@@ -308,10 +308,10 @@ func dataDirPath(cctx *cli.Context) string {
 			homeDir = "./"
 		}
 
-		dataDir = homeDir
+		dataDir = path.Join(homeDir, "/.autoretrieve")
 	}
 
-	return path.Join(dataDir, "/.autoretrieve")
+	return dataDir
 }
 
 func fullConfigPath(cctx *cli.Context) string {
