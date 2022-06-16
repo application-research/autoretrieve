@@ -125,24 +125,12 @@ func contextWithInterruptCancel() context.Context {
 }
 
 // Main command entry point.
-func cmd(cctx *cli.Context) error {
+func cmd(ctx *cli.Context) error {
 
-	cfg, err := LoadConfig(fullConfigPath(cctx))
+	cfg, err := getFullConfig(ctx)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			logger.Infof("No config file found, generating default at %s", fullConfigPath(cctx))
-			cfg := DefaultConfig()
-			if err := applyConfigCLIOverrides(cctx, &cfg); err != nil {
-				return err
-			}
-
-			WriteConfig(cfg, fullConfigPath(cctx))
-		} else {
-			return err
-		}
+		return err
 	}
-
-	applyConfigCLIOverrides(cctx, &cfg)
 
 	if err := metrics.GoMetricsInjectPrometheus(); err != nil {
 		logger.Warnf("Failed to inject prometheus: %v", err)
@@ -176,29 +164,29 @@ func cmd(cctx *cli.Context) error {
 
 	cfg.Metrics = metrics.NewMulti(
 		metrics.NewBasic(logger),
-		metrics.NewGoMetrics(cctx.Context),
+		metrics.NewGoMetrics(ctx.Context),
 	)
 
-	autoretrieve, err := New(cctx, dataDirPath(cctx), cfg)
+	autoretrieve, err := New(ctx, dataDirPath(ctx), cfg)
 	if err != nil {
 		return err
 	}
 
-	<-cctx.Context.Done()
+	<-ctx.Context.Done()
 
 	autoretrieve.Close()
 
 	return nil
 }
 
-func cmdTestBlockstore(cctx *cli.Context) error {
+func cmdTestBlockstore(ctx *cli.Context) error {
 	// Initialize blockstore manager
 	parseShardFunc, err := flatfs.ParseShardFunc("/repo/flatfs/shard/v1/next-to-last/3")
 	if err != nil {
 		return err
 	}
 
-	blockstoreDatastore, err := flatfs.CreateOrOpen(filepath.Join(dataDirPath(cctx), blockstoreSubdir), parseShardFunc, false)
+	blockstoreDatastore, err := flatfs.CreateOrOpen(filepath.Join(dataDirPath(ctx), blockstoreSubdir), parseShardFunc, false)
 	if err != nil {
 		return err
 	}
@@ -214,14 +202,14 @@ func cmdTestBlockstore(cctx *cli.Context) error {
 	ds := merkledag.NewDAGService(bs)
 
 	cset := cid.NewSet()
-	c, err := cid.Parse(cctx.Args().First())
+	c, err := cid.Parse(ctx.Args().First())
 
 	var size int
 	var count int
 	complete := true
 
-	if err := merkledag.Walk(cctx.Context, func(ctx context.Context, c cid.Cid) ([]*format.Link, error) {
-		node, err := ds.Get(cctx.Context, c)
+	if err := merkledag.Walk(ctx.Context, func(ctx context.Context, c cid.Cid) ([]*format.Link, error) {
+		node, err := ds.Get(ctx, c)
 		if err != nil {
 			return nil, err
 		}
@@ -232,7 +220,7 @@ func cmdTestBlockstore(cctx *cli.Context) error {
 
 		return node.Links(), nil
 	}, c, func(c cid.Cid) bool {
-		blockSize, err := blockManager.GetSize(cctx.Context, c)
+		blockSize, err := blockManager.GetSize(ctx.Context, c)
 		if err != nil {
 			fmt.Printf("Error getting block size: %v\n", err)
 			complete = false
@@ -258,32 +246,22 @@ func cmdTestBlockstore(cctx *cli.Context) error {
 	return nil
 }
 
-func cmdGenConfig(cctx *cli.Context) error {
+func cmdGenConfig(ctx *cli.Context) error {
 	cfg := DefaultConfig()
-	if err := applyConfigCLIOverrides(cctx, &cfg); err != nil {
+	if err := applyConfigCLIOverrides(ctx, &cfg); err != nil {
 		return err
 	}
 
-	cfgPath := fullConfigPath(cctx)
+	cfgPath := fullConfigPath(ctx)
 	fmt.Printf("Writing config to '%s'\n", cfgPath)
 	WriteConfig(cfg, cfgPath)
 
 	return nil
 }
 
-func cmdPrintConfig(cctx *cli.Context) error {
-	cfgPath := fullConfigPath(cctx)
-	cfg, err := LoadConfig(cfgPath)
+func cmdPrintConfig(ctx *cli.Context) error {
+	cfg, err := getFullConfig(ctx)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			fmt.Printf("NOTE: no config file found, using defaults; run autoretrieve or use the gen-config subcommand to generate one\n-----\n")
-			cfg = DefaultConfig()
-		} else {
-			return err
-		}
-	}
-
-	if err := applyConfigCLIOverrides(cctx, &cfg); err != nil {
 		return err
 	}
 
@@ -292,15 +270,33 @@ func cmdPrintConfig(cctx *cli.Context) error {
 		return err
 	}
 
-	fmt.Printf("Reading config from '%s'\n", cfgPath)
-
 	fmt.Printf("%s\n", string(bytes))
 
 	return nil
 }
 
-func dataDirPath(cctx *cli.Context) string {
-	dataDir := cctx.String("data-dir")
+func getFullConfig(ctx *cli.Context) (Config, error) {
+	cfgPath := fullConfigPath(ctx)
+	fmt.Printf("Reading config from '%s'\n", cfgPath)
+	cfg, err := LoadConfig(cfgPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			fmt.Printf("NOTE: no config file found, using defaults; run autoretrieve or use the gen-config subcommand to generate one\n-----\n")
+			cfg = DefaultConfig()
+		} else {
+			return Config{}, err
+		}
+	}
+
+	if err := applyConfigCLIOverrides(ctx, &cfg); err != nil {
+		return Config{}, err
+	}
+
+	return cfg, nil
+}
+
+func dataDirPath(ctx *cli.Context) string {
+	dataDir := ctx.String("data-dir")
 
 	if dataDir == "" {
 		homeDir, err := os.UserHomeDir()
@@ -314,14 +310,14 @@ func dataDirPath(cctx *cli.Context) string {
 	return dataDir
 }
 
-func fullConfigPath(cctx *cli.Context) string {
-	return path.Join(dataDirPath(cctx), configPath)
+func fullConfigPath(ctx *cli.Context) string {
+	return path.Join(dataDirPath(ctx), configPath)
 }
 
-// Updates a file-loaded config using the args passed in through CLI
-func applyConfigCLIOverrides(cctx *cli.Context, cfg *Config) error {
-	if cctx.IsSet("lookup-endpoint-type") {
-		lookupEndpointType, err := ParseEndpointType(cctx.String("lookup-endpoint-type"))
+// Modifies a config in-place using args passed in through CLI
+func applyConfigCLIOverrides(ctx *cli.Context, cfg *Config) error {
+	if ctx.IsSet("lookup-endpoint-type") {
+		lookupEndpointType, err := ParseEndpointType(ctx.String("lookup-endpoint-type"))
 		if err != nil {
 			return err
 		}
@@ -329,12 +325,12 @@ func applyConfigCLIOverrides(cctx *cli.Context, cfg *Config) error {
 		cfg.LookupEndpointType = lookupEndpointType
 	}
 
-	if cctx.IsSet("lookup-endpoint-url") {
-		cfg.LookupEndpointURL = cctx.String("lookup-endpoint-url")
+	if ctx.IsSet("lookup-endpoint-url") {
+		cfg.LookupEndpointURL = ctx.String("lookup-endpoint-url")
 	}
 
-	if cctx.IsSet("routing-table-type") {
-		routingTableType, err := bitswap.ParseRoutingTableType(cctx.String("routing-table-type"))
+	if ctx.IsSet("routing-table-type") {
+		routingTableType, err := bitswap.ParseRoutingTableType(ctx.String("routing-table-type"))
 		if err != nil {
 			return err
 		}
@@ -342,16 +338,16 @@ func applyConfigCLIOverrides(cctx *cli.Context, cfg *Config) error {
 		cfg.RoutingTableType = routingTableType
 	}
 
-	if cctx.IsSet("disable-retrieval") {
-		cfg.DisableRetrieval = cctx.Bool("disable-retrieval")
+	if ctx.IsSet("disable-retrieval") {
+		cfg.DisableRetrieval = ctx.Bool("disable-retrieval")
 	}
 
-	if cctx.IsSet("log-resource-manager") {
-		cfg.LogResourceManager = cctx.Bool("log-resource-manager")
+	if ctx.IsSet("log-resource-manager") {
+		cfg.LogResourceManager = ctx.Bool("log-resource-manager")
 	}
 
-	if cctx.IsSet("log-retrievals") {
-		cfg.LogRetrievals = cctx.Bool("log-retrievals")
+	if ctx.IsSet("log-retrievals") {
+		cfg.LogRetrievals = ctx.Bool("log-retrievals")
 	}
 
 	return nil
