@@ -12,7 +12,10 @@ import (
 	"github.com/filecoin-project/index-provider/metadata"
 	"github.com/filecoin-project/storetheindex/api/v0/finder/model"
 	"github.com/ipfs/go-cid"
+	"github.com/ipfs/go-log/v2"
 )
+
+var logger = log.Logger("endpoint-indexer")
 
 type IndexerEndpoint struct {
 	c       *http.Client
@@ -52,6 +55,10 @@ func (idxf *IndexerEndpoint) sendRequest(req *http.Request) (*model.FindResponse
 }
 
 func (idxf *IndexerEndpoint) FindCandidates(ctx context.Context, cid cid.Cid) ([]filecoin.RetrievalCandidate, error) {
+	if idxf.baseUrl == "" {
+		logger.Warnf("lost indexer endpoint: %+v", idxf)
+		idxf.baseUrl = "https://cid.contact"
+	}
 	u := fmt.Sprint(idxf.baseUrl, "/multihash/", cid.Hash().B58String())
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
