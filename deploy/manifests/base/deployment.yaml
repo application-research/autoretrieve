@@ -19,7 +19,7 @@ spec:
         - name: autoretrieve
           image: autoretrieve
           args:
-            - --data-dir=/data
+            - --data-dir=/data/.autoretrieve
           envFrom:
             - configMapRef:
                 name: autoretrieve-env
@@ -33,10 +33,10 @@ spec:
               port: libp2p
           volumeMounts:
             - name: config
-              mountPath: /data/config.yaml
+              mountPath: /data/.autoretrieve/config.yaml
               subPath: config.yaml
             - name: identity
-              mountPath: /data/peerkey
+              mountPath: /data/.autoretrieve/peerkey
               subPath: peerkey
           resources:
             limits:
