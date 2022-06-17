@@ -33,10 +33,10 @@ spec:
               port: libp2p
           volumeMounts:
             - name: config
-              mountPath: /data/.autoretrieve/config.yaml
+              mountPath: /data/config.yaml
               subPath: config.yaml
             - name: identity
-              mountPath: /data/.autoretrieve/peerkey
+              mountPath: /data/peerkey
               subPath: peerkey
           resources:
             limits:
