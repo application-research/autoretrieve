@@ -38,8 +38,10 @@ Configurations are applied in the following order, from least to most important:
 ### YAML Example
 
 ```yaml
-endpoint-type: indexer # indexer | estuary
-endpoint-url: https://cid.contact # for estuary endpoint-type: https://api.estuary.tech/retrieval-candidates
+advertise-endpoint-url: # leave blank to disable, example https://api.estuary.tech/autoretrieve/heartbeat (must be registered)
+advertise-endpoint-token: # leave blank to disable
+lookup-endpoint-type: indexer # indexer | estuary
+lookup-endpoint-url: https://cid.contact # for estuary endpoint-type: https://api.estuary.tech/retrieval-candidates
 max-bitswap-workers: 1
 routing-table-type: dht
 prune-threshold: 1GiB # 1000000000, 1 GB, etc. Uses go-humanize for parsing. Table of valid byte sizes can be found here: https://github.com/dustin/go-humanize/blob/v1.0.0/bytes.go#L34-L62
@@ -83,12 +85,12 @@ COMMANDS:
    help, h       Shows a list of commands or help for one command
 
 GLOBAL OPTIONS:
-   --data-dir value             [$AUTORETRIEVE_DATA_DIR]
-   --endpoint-url value        Indexer or Estuary endpoint to get retrieval candidates from [$AUTORETRIEVE_ENDPOINT_URL]
-   --endpoint-type value       Type of endpoint for finding data (valid values are "estuary" and "indexer") [$AUTORETRIEVE_ENDPOINT_TYPE]
-   --disable-retrieval         Whether to disable the retriever module, for testing provider only (default: false) [$AUTORETRIEVE_DISABLE_RETRIEVAL]
-   --routing-table-type value  [dht|fullrt|disabled] [$AUTORETRIEVE_ROUTING_TABLE_TYPE]
-   --log-resource-manager      Whether to present output about the current state of the libp2p resource manager (default: false) [$AUTORETRIEVE_LOG_RESOURCE_MANAGER]
-   --log-retrievals            Whether to present periodic output about the progress of retrievals (default: false) [$AUTORETRIEVE_LOG_RETRIEVALS]
-   --help, -h                  show help (default: false)
+   --data-dir value               [$AUTORETRIEVE_DATA_DIR]
+   --lookup-endpoint-url value   Indexer or Estuary endpoint to get retrieval candidates from [$AUTORETRIEVE_LOOKUP_ENDPOINT_URL]
+   --lookup-endpoint-type value  Type of endpoint for finding data (valid values are "estuary" and "indexer") [$AUTORETRIEVE_LOOKUP_ENDPOINT_TYPE]
+   --disable-retrieval           Whether to disable the retriever module, for testing provider only (default: false) [$AUTORETRIEVE_DISABLE_RETRIEVAL]
+   --routing-table-type value    [dht|fullrt|disabled] [$AUTORETRIEVE_ROUTING_TABLE_TYPE]
+   --log-resource-manager        Whether to present output about the current state of the libp2p resource manager (default: false) [$AUTORETRIEVE_LOG_RESOURCE_MANAGER]
+   --log-retrievals              Whether to present periodic output about the progress of retrievals (default: false) [$AUTORETRIEVE_LOG_RETRIEVALS]
+   --help, -h                    show help (default: false)
 ```
