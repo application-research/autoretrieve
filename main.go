@@ -1,20 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"mime/multipart"
 	"net/http"
 	_ "net/http/pprof"
-	"net/url"
 	"os"
 	"os/signal"
 	"path"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/application-research/autoretrieve/bitswap"
 	"github.com/application-research/autoretrieve/blocks"
@@ -344,16 +344,16 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	fmt.Printf("Using public key: %s\n", peerkeyPub)
 
 	// Do registration
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer.WriteField("addresses", fmt.Sprintf("/ip4/%s/tcp/6746/p2p/%s", ipInfo.Query, peer))
+	writer.WriteField("pubKey", peerkeyPub)
+	writer.Close()
 
-	form := url.Values{}
-	form.Set("addresses", fmt.Sprintf("/ip4/%s/tcp/6746/p2p/%s", ipInfo.Query, peer))
-	form.Set("peerId", url.QueryEscape(peerkeyPub))
-
-	req, err := http.NewRequestWithContext(
-		ctx.Context,
+	req, err := http.NewRequest(
 		"POST",
 		endpointURL,
-		strings.NewReader(form.Encode()),
+		body,
 	)
 
 	if err != nil {
@@ -361,6 +361,7 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	}
 
 	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
