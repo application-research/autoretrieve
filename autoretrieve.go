@@ -276,7 +276,7 @@ func (autoretrieve *Autoretrieve) Close() {
 	autoretrieve.host.Close()
 }
 
-func initHost(ctx context.Context, dataDir string, resourceManagerStats bool, listenAddrs ...multiaddr.Multiaddr) (host.Host, error) {
+func loadPeerKey(dataDir string) (crypto.PrivKey, error) {
 	var peerkey crypto.PrivKey
 	keyPath := filepath.Join(dataDir, "peerkey")
 	keyFile, err := os.ReadFile(keyPath)
@@ -312,6 +312,16 @@ func initHost(ctx context.Context, dataDir string, resourceManagerStats bool, li
 
 	if peerkey == nil {
 		panic("sanity check: peer key is uninitialized")
+	}
+
+	return peerkey, nil
+}
+
+func initHost(ctx context.Context, dataDir string, resourceManagerStats bool, listenAddrs ...multiaddr.Multiaddr) (host.Host, error) {
+
+	peerkey, err := loadPeerKey(dataDir)
+	if err != nil {
+		return nil, err
 	}
 
 	host, err := libp2p.New(libp2p.ListenAddrs(listenAddrs...), libp2p.Identity(peerkey), libp2p.ResourceManager(network.NullResourceManager))

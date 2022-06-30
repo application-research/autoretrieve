@@ -2,15 +2,19 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	_ "net/http/pprof"
+	"net/url"
 	"os"
 	"os/signal"
 	"path"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/application-research/autoretrieve/bitswap"
 	"github.com/application-research/autoretrieve/blocks"
@@ -24,6 +28,8 @@ import (
 	format "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-merkledag"
+	crypto "github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v2"
 )
@@ -97,6 +103,12 @@ func main() {
 			Name:   "check-cid",
 			Action: cmdTestBlockstore,
 			Usage:  "Takes a CID argument and tries walking the DAG using the local blockstore",
+		},
+		{
+			Name:      "register-estuary",
+			Action:    cmdRegisterEstuary,
+			Usage:     "Automatically registers this instance with Estuary for content advertisement and updates the config as necessary",
+			ArgsUsage: "<endpoint url> <admin token>",
 		},
 	}
 
@@ -271,6 +283,95 @@ func cmdPrintConfig(ctx *cli.Context) error {
 	}
 
 	fmt.Printf("%s\n", string(bytes))
+
+	return nil
+}
+
+func cmdRegisterEstuary(ctx *cli.Context) error {
+	endpointURL := ctx.Args().Get(0)
+	token := ctx.Args().Get(1)
+
+	if endpointURL == "" {
+		return fmt.Errorf("an Estuary endpoint URL is required (first argument)")
+	}
+
+	if token == "" {
+		return fmt.Errorf("an Estuary admin token is required (second argument)")
+	}
+
+	// Get public IP address
+
+	publicIPRes, err := http.Get("http://ip-api.com/json")
+	if err != nil {
+		return fmt.Errorf("could not get public ip: %v", err)
+	}
+	defer publicIPRes.Body.Close()
+
+	var ipInfo struct {
+		Query string
+	}
+
+	if err := json.NewDecoder(publicIPRes.Body).Decode(&ipInfo); err != nil {
+		return fmt.Errorf("could not get public ip: %v", err)
+	}
+
+	fmt.Printf("Using IP: %s\n", ipInfo.Query)
+
+	// Get peer key
+
+	peerkey, err := loadPeerKey(dataDirPath(ctx))
+	if err != nil {
+		return fmt.Errorf("couldn't get peer key: %v", err)
+	}
+
+	// peerkeyPubProto, err := crypto.PublicKeyToProto(peerkey.GetPublic())
+	// if err != nil {
+	// 	return fmt.Errorf("couldn't get peer public key: %v", err)
+	// }
+
+	peerkeyPubBytes, err := crypto.MarshalPublicKey(peerkey.GetPublic())
+	if err != nil {
+		return fmt.Errorf("couldn't marshal peer public key: %v", err)
+	}
+	peerkeyPub := crypto.ConfigEncodeKey(peerkeyPubBytes)
+
+	peer, err := peer.IDFromPrivateKey(peerkey)
+	if err != nil {
+		return fmt.Errorf("couldn't get peer id from key: %v", err)
+	}
+
+	// fmt.Printf("Using peer ID: %s\n", peer)
+	fmt.Printf("Using public key: %s\n", peerkeyPub)
+
+	// Do registration
+
+	form := url.Values{}
+	form.Set("addresses", fmt.Sprintf("/ip4/%s/tcp/6746/p2p/%s", ipInfo.Query, peer))
+	form.Set("peerId", url.QueryEscape(peerkeyPub))
+
+	req, err := http.NewRequestWithContext(
+		ctx.Context,
+		"POST",
+		endpointURL,
+		strings.NewReader(form.Encode()),
+	)
+
+	if err != nil {
+		return fmt.Errorf("building registration request failed: %v", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("registration request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	outputBytes, err := ioutil.ReadAll(res.Body)
+	output := string(outputBytes)
+
+	fmt.Printf("output: %s\n", output)
 
 	return nil
 }
