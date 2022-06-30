@@ -31,7 +31,7 @@ type minerMonitorConfig struct {
 type minerMonitor struct {
 	cfg minerMonitorConfig
 
-	lk       sync.Mutex
+	lk       sync.RWMutex
 	statuses map[peer.ID]minerStatus
 }
 
@@ -44,8 +44,8 @@ func newMinerMonitor(cfg minerMonitorConfig) *minerMonitor {
 }
 
 func (monitor *minerMonitor) suspended(miner peer.ID) bool {
-	monitor.lk.Lock()
-	defer monitor.lk.Unlock()
+	monitor.lk.RLock()
+	defer monitor.lk.RUnlock()
 
 	if status, ok := monitor.statuses[miner]; ok {
 		return status.suspended()
