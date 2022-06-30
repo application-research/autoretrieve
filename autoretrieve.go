@@ -17,7 +17,6 @@ import (
 	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/endpoint"
 	"github.com/application-research/autoretrieve/filecoin"
-	"github.com/application-research/autoretrieve/metrics"
 	"github.com/application-research/filclient"
 	"github.com/application-research/filclient/keystore"
 	"github.com/filecoin-project/go-address"
@@ -62,10 +61,6 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 
 	if err := os.MkdirAll(dataDir, 0744); err != nil {
 		return nil, err
-	}
-
-	if cfg.Metrics == nil {
-		cfg.Metrics = metrics.NewNoop()
 	}
 
 	// Initialize P2P host
@@ -133,12 +128,11 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 
 	walletAddr, err := wallet.GetDefault()
 	if err != nil {
+		logger.Warnf("Could not load any default wallet address, only free retrievals will be attempted: %v", err)
 		walletAddr = address.Undef
+	} else {
+		logger.Infof("Using default wallet address %s", walletAddr)
 	}
-	cfg.Metrics.RecordWallet(metrics.WalletInfo{
-		Err:  err,
-		Addr: walletAddr,
-	})
 
 	const maxTraversalLinks = 32 * (1 << 20)
 	fc, err := filclient.NewClient(
