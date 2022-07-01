@@ -245,7 +245,10 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		}
 
 		go func() {
-			for range time.Tick(time.Hour * 6) {
+			ticker := time.NewTicker(time.Hour * 6)
+			for ; true; <-ticker.C {
+				logger.Infof("Sending Estuary heartbeat message")
+
 				req, err := http.NewRequest("GET", cfg.AdvertiseEndpointURL, bytes.NewBuffer(nil))
 				if err != nil {
 					logger.Errorf("Failed to create Estuary heartbeat message: %v", err)
