@@ -9,7 +9,6 @@ import (
 
 	"github.com/application-research/autoretrieve/bitswap"
 	"github.com/application-research/autoretrieve/filecoin"
-	"github.com/application-research/autoretrieve/metrics"
 	"github.com/application-research/filclient"
 	"github.com/dustin/go-humanize"
 	"github.com/filecoin-project/go-address"
@@ -178,8 +177,6 @@ type Config struct {
 
 	DefaultMinerConfig MinerConfig                           `yaml:"default-miner-config"`
 	MinerConfigs       map[ConfigStorageProvider]MinerConfig `yaml:"miner-configs"`
-
-	Metrics metrics.Metrics `yaml:"-"`
 }
 
 // Extract relevant config points into a filecoin retriever config
@@ -210,7 +207,6 @@ func (cfg *Config) ExtractFilecoinRetrieverConfig(ctx context.Context, fc *filcl
 		MinerWhitelist:     whitelist,
 		DefaultMinerConfig: filecoin.MinerConfig(cfg.DefaultMinerConfig),
 		MinerConfigs:       convertedMinerCfgs,
-		Metrics:            cfg.Metrics,
 	}, nil
 }
 
