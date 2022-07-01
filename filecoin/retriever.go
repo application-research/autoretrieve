@@ -11,6 +11,7 @@ import (
 	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/metrics"
 	"github.com/application-research/filclient"
+	"github.com/application-research/filclient/rep"
 	"github.com/application-research/filclient/retrievehelper"
 	"github.com/dustin/go-humanize"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
@@ -107,6 +108,8 @@ func NewRetriever(
 		runningRetrievals:        make(map[cid.Cid]bool),
 		activeRetrievalsPerMiner: make(map[peer.ID]uint),
 	}
+
+	retriever.filClient.SubscribeToRetrievalEvents(retriever)
 
 	return retriever, nil
 }
@@ -270,7 +273,7 @@ func (retriever *Retriever) retrieve(ctx context.Context, query candidateQuery) 
 			timedOut = true
 		})
 	}
-	stats, err := retriever.filClient.RetrieveContextFromPeerWithProgressCallback(retrieveCtx, query.candidate.MinerPeer.ID, query.response.PaymentAddress, proposal, func(bytesReceived uint64) {
+	stats, err := retriever.filClient.RetrieveContentFromPeerWithProgressCallback(retrieveCtx, query.candidate.MinerPeer.ID, query.response.PaymentAddress, proposal, func(bytesReceived uint64) {
 		if lastBytesReceivedTimer != nil {
 			doneLk.Lock()
 			if !done {
@@ -439,4 +442,13 @@ func formatCid(cid cid.Cid, short bool) string {
 	} else {
 		return str
 	}
+}
+
+// Implement rep.RetrievalSubscriber
+func (retriever *Retriever) OnRetrievalEvent(event rep.RetrievalEvent) {
+	log.Debugf("%s %s", event.Code, event.Status)
+}
+
+func (retriever *Retriever) RetrievalSubscriberId() interface{} {
+	return "autoretrieve"
 }
