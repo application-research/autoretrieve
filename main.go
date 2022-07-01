@@ -384,8 +384,6 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 		return fmt.Errorf("registration failed: %s\n", output.Error)
 	}
 
-	fmt.Printf("output: %#v\n", output)
-
 	cfg, err := LoadConfig(fullConfigPath(ctx))
 	cfg.AdvertiseEndpointURL = endpointURL
 	cfg.AdvertiseToken = output.Token
