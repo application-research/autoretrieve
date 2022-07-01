@@ -11,6 +11,7 @@ import (
 	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/metrics"
 	"github.com/application-research/filclient"
+	"github.com/application-research/filclient/rep"
 	"github.com/application-research/filclient/retrievehelper"
 	"github.com/dustin/go-humanize"
 	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
@@ -45,7 +46,6 @@ type RetrieverConfig struct {
 	MinerWhitelist     map[peer.ID]bool
 	DefaultMinerConfig MinerConfig
 	MinerConfigs       map[peer.ID]MinerConfig
-	Metrics            metrics.Metrics
 }
 
 func (cfg *RetrieverConfig) MinerConfig(peer peer.ID) MinerConfig {
@@ -103,11 +103,6 @@ func NewRetriever(
 	datastore datastore.Batching,
 	blockManager *blocks.Manager,
 ) (*Retriever, error) {
-
-	if config.Metrics == nil {
-		config.Metrics = metrics.NewNoop()
-	}
-
 	retriever := &Retriever{
 		config:                   config,
 		endpoint:                 endpoint,
@@ -120,6 +115,8 @@ func NewRetriever(
 			failureHistoryDuration:   time.Second * 15,
 		}),
 	}
+
+	retriever.filClient.SubscribeToRetrievalEvents(retriever)
 
 	return retriever, nil
 }
@@ -135,19 +132,11 @@ func NewRetriever(
 // Possible errors: ErrInvalidEndpointURL, ErrEndpointRequestFailed,
 // ErrEndpointBodyInvalid, ErrNoCandidates
 func (retriever *Retriever) Request(cid cid.Cid) error {
-
-	requestInfo := metrics.RequestInfo{
-		RequestCid: cid,
-	}
-
 	// TODO: before looking up candidates from the endpoint, we could cache
 	// candidates and use that cached info. We only really have to look up an
 	// up-to-date candidate list from the endpoint if we need to begin a new
 	// retrieval.
 	candidates, err := retriever.lookupCandidates(context.Background(), cid)
-	retriever.config.Metrics.RecordGetCandidatesResult(requestInfo, metrics.GetCandidatesResult{
-		Err: err,
-	})
 	if err != nil {
 		return fmt.Errorf("could not get retrieval candidates for %s: %w", cid, err)
 	}
@@ -194,11 +183,6 @@ func (retriever *Retriever) retrieveFromBestCandidate(ctx context.Context, cid c
 	// complete
 	var retrievalStats *filclient.RetrievalStats
 	for _, query := range queries {
-		candidateInfo := metrics.CandidateInfo{
-			RequestInfo: metrics.RequestInfo{RequestCid: cid},
-			RootCid:     query.candidate.RootCid,
-			PeerID:      query.candidate.MinerPeer.ID,
-		}
 		if err := retriever.tryRegisterRunningRetrieval(query.candidate.RootCid, query.candidate.MinerPeer.ID); err != nil {
 			// TODO: send some info to metrics about this
 
@@ -209,8 +193,11 @@ func (retriever *Retriever) retrieveFromBestCandidate(ctx context.Context, cid c
 			continue
 		}
 
-		// TODO: Determine if we still need this log
-		retriever.config.Metrics.RecordRetrieval(candidateInfo)
+		log.Infof(
+			"Attempting retrieval from miner %s for %s",
+			query.candidate.MinerPeer.ID,
+			formatCidAndRoot(cid, query.candidate.RootCid, false),
+		)
 
 		stats.Record(ctx, metrics.RetrievalRequestCount.M(1))
 		stats.Record(ctx, metrics.RetrievalDealActiveCount.M(1))
@@ -220,21 +207,31 @@ func (retriever *Retriever) retrieveFromBestCandidate(ctx context.Context, cid c
 
 		stats.Record(ctx, metrics.RetrievalDealActiveCount.M(-1))
 		if err != nil {
+			log.Errorf(
+				"Failed to retrieve from miner %s for %s: %v",
+				query.candidate.MinerPeer.ID,
+				formatCidAndRoot(cid, query.candidate.RootCid, false),
+				err,
+			)
 			stats.Record(ctx, metrics.RetrievalDealFailCount.M(1))
 		} else {
+			log.Infof(
+				"Successfully retrieved from miner %s for %s\n"+
+					"\tDuration: %s\n"+
+					"\tBytes Received: %s\n"+
+					"\tTotal Payment: %s",
+				query.candidate.MinerPeer.ID,
+				formatCidAndRoot(cid, query.candidate.RootCid, false),
+				retrievalStats.Duration,
+				humanize.IBytes(retrievalStats.Size),
+				types.FIL(retrievalStats.TotalPayment),
+			)
+
 			stats.Record(ctx, metrics.RetrievalDealSuccessCount.M(1))
 			stats.Record(ctx, metrics.RetrievalDealDuration.M(retrievalStats.Duration.Seconds()))
 			stats.Record(ctx, metrics.RetrievalDealSize.M(int64(retrievalStats.Size)))
 			stats.Record(ctx, metrics.RetrievalDealCost.M(retrievalStats.TotalPayment.Int64()))
 		}
-
-		// TODO: Determine if we still need this log
-		retriever.config.Metrics.RecordRetrievalResult(candidateInfo, metrics.RetrievalResult{
-			Duration:      retrievalStats.Duration,
-			BytesReceived: retrievalStats.Size,
-			TotalPayment:  types.FIL(retrievalStats.TotalPayment),
-			Err:           err,
-		})
 
 		retriever.unregisterRunningRetrieval(query.candidate.RootCid, query.candidate.MinerPeer.ID)
 
@@ -283,7 +280,7 @@ func (retriever *Retriever) retrieve(ctx context.Context, query candidateQuery) 
 			timedOut = true
 		})
 	}
-	stats, err := retriever.filClient.RetrieveContextFromPeerWithProgressCallback(retrieveCtx, query.candidate.MinerPeer.ID, query.response.PaymentAddress, proposal, func(bytesReceived uint64) {
+	stats, err := retriever.filClient.RetrieveContentFromPeerWithProgressCallback(retrieveCtx, query.candidate.MinerPeer.ID, query.response.PaymentAddress, proposal, func(bytesReceived uint64) {
 		if lastBytesReceivedTimer != nil {
 			doneLk.Lock()
 			if !done {
@@ -415,21 +412,14 @@ func (retriever *Retriever) queryCandidates(ctx context.Context, cid cid.Cid, ca
 		go func(i int, candidate RetrievalCandidate) {
 			defer wg.Done()
 
-			candidateInfo := metrics.CandidateInfo{
-				RequestInfo: metrics.RequestInfo{RequestCid: cid},
-				RootCid:     candidate.RootCid,
-				PeerID:      candidate.MinerPeer.ID,
-			}
-
-			retriever.config.Metrics.RecordQuery(candidateInfo)
 			query, err := retriever.filClient.RetrievalQueryToPeer(ctx, candidate.MinerPeer, candidate.RootCid)
 			if err != nil {
-				retriever.minerMonitor.recordFailure(candidate.MinerPeer.ID)
-			}
-			retriever.config.Metrics.RecordQueryResult(candidateInfo, metrics.QueryResult{
-				Err: err,
-			})
-			if err != nil {
+				log.Errorf(
+					"Failed to query miner %s for %s: %v",
+					candidate.MinerPeer.ID,
+					formatCidAndRoot(cid, candidate.RootCid, false),
+					err,
+				)
 				return
 			}
 
@@ -450,4 +440,30 @@ func (retriever *Retriever) queryCandidates(ctx context.Context, cid cid.Cid, ca
 
 func totalCost(qres *retrievalmarket.QueryResponse) big.Int {
 	return big.Add(big.Mul(qres.MinPricePerByte, big.NewIntUnsigned(qres.Size)), qres.UnsealPrice)
+}
+
+func formatCidAndRoot(cid cid.Cid, root cid.Cid, short bool) string {
+	if cid.Equals(root) {
+		return formatCid(cid, short)
+	} else {
+		return fmt.Sprintf("%s (root %s)", formatCid(cid, short), formatCid(root, short))
+	}
+}
+
+func formatCid(cid cid.Cid, short bool) string {
+	str := cid.String()
+	if short {
+		return "..." + str[len(str)-10:]
+	} else {
+		return str
+	}
+}
+
+// Implement rep.RetrievalSubscriber
+func (retriever *Retriever) OnRetrievalEvent(event rep.RetrievalEvent) {
+	log.Debugf("%s %s", event.Code, event.Status)
+}
+
+func (retriever *Retriever) RetrievalSubscriberId() interface{} {
+	return "autoretrieve"
 }
