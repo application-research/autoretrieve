@@ -194,6 +194,11 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				// If no candidates were found, there's nothing that can be done, so
 				// queue DONT_HAVE and move on
 				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
+
+				if !errors.Is(err, filecoin.ErrNoCandidates) {
+					logger.Errorf("Could not get candidates: %v")
+				}
+
 				continue
 			}
 
@@ -206,6 +211,11 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				// If no candidates were found, there's nothing that can be done, so
 				// queue DONT_HAVE and move on
 				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
+
+				if !errors.Is(err, filecoin.ErrNoCandidates) {
+					logger.Errorf("Could not get candidates: %v")
+				}
+
 				continue
 			}
 

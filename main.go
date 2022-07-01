@@ -144,10 +144,6 @@ func cmd(ctx *cli.Context) error {
 		return err
 	}
 
-	if err := metrics.GoMetricsInjectPrometheus(); err != nil {
-		logger.Warnf("Failed to inject prometheus: %v", err)
-	}
-
 	go func() {
 		http.Handle("/metrics", metrics.PrometheusHandler())
 		http.HandleFunc("/debug/stacktrace", func(w http.ResponseWriter, r *http.Request) {
@@ -173,11 +169,6 @@ func cmd(ctx *cli.Context) error {
 			logger.Errorf("Could not start prometheus endpoint server: %s", err)
 		}
 	}()
-
-	cfg.Metrics = metrics.NewMulti(
-		metrics.NewBasic(logger),
-		metrics.NewGoMetrics(ctx.Context),
-	)
 
 	autoretrieve, err := New(ctx, dataDirPath(ctx), cfg)
 	if err != nil {
