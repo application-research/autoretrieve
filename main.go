@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	_ "net/http/pprof"
@@ -114,7 +113,7 @@ func main() {
 
 	ctx := contextWithInterruptCancel()
 	if err := app.RunContext(ctx, os.Args); err != nil {
-		logger.Fatalf("%v", err)
+		fmt.Printf("%v\n", err)
 	}
 }
 
@@ -335,9 +334,9 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	}
 	peerkeyPub := crypto.ConfigEncodeKey(peerkeyPubBytes)
 
-	peer, err := peer.IDFromPrivateKey(peerkey)
+	peerID, err := peer.IDFromPrivateKey(peerkey)
 	if err != nil {
-		return fmt.Errorf("couldn't get peer id from key: %v", err)
+		return fmt.Errorf("couldn't get peer ID from key: %v", err)
 	}
 
 	// fmt.Printf("Using peer ID: %s\n", peer)
@@ -346,7 +345,7 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	// Do registration
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	writer.WriteField("addresses", fmt.Sprintf("/ip4/%s/tcp/6746/p2p/%s", ipInfo.Query, peer))
+	writer.WriteField("addresses", fmt.Sprintf("/ip4/%s/tcp/6746/p2p/%s", ipInfo.Query, peerID))
 	writer.WriteField("pubKey", peerkeyPub)
 	writer.Close()
 
@@ -369,10 +368,30 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	}
 	defer res.Body.Close()
 
-	outputBytes, err := ioutil.ReadAll(res.Body)
-	output := string(outputBytes)
+	var output struct {
+		Handle         string
+		Token          string
+		LastConnection string
+		AddrInfo       peer.AddrInfo
+		Error          string
+	}
+	// outputStr, err := ioutil.ReadAll(res.Body)
+	if err := json.NewDecoder(res.Body).Decode(&output); err != nil {
+		return fmt.Errorf("couldn't decode response: %v", err)
+	}
 
-	fmt.Printf("output: %s\n", output)
+	if output.Error != "" {
+		return fmt.Errorf("registration failed: %s\n", output.Error)
+	}
+
+	fmt.Printf("output: %#v\n", output)
+
+	cfg, err := LoadConfig(fullConfigPath(ctx))
+	cfg.AdvertiseEndpointURL = endpointURL
+	cfg.AdvertiseToken = output.Token
+	if err := WriteConfig(cfg, fullConfigPath(ctx)); err != nil {
+		return fmt.Errorf("failed to write config: %v", err)
+	}
 
 	return nil
 }
