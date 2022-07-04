@@ -55,8 +55,6 @@ func (monitor *minerMonitor) suspended(miner peer.ID) bool {
 }
 
 func (monitor *minerMonitor) recordFailure(miner peer.ID) {
-	log.Warnf("%#v", monitor.cfg)
-
 	monitor.lk.Lock()
 	defer monitor.lk.Unlock()
 
@@ -74,8 +72,6 @@ func (monitor *minerMonitor) recordFailure(miner peer.ID) {
 
 	// Add new failure to history
 	status.failures = append(status.failures, time.Now())
-
-	log.Warnf("failure count: %d", len(status.failures))
 
 	// Decide whether to suspend miner
 	if len(status.failures) > int(monitor.cfg.maxFailuresBeforeSuspend) {

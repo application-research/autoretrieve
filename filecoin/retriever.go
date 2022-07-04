@@ -420,6 +420,7 @@ func (retriever *Retriever) queryCandidates(ctx context.Context, cid cid.Cid, ca
 					formatCidAndRoot(cid, candidate.RootCid, false),
 					err,
 				)
+				retriever.minerMonitor.recordFailure(candidate.MinerPeer.ID)
 				return
 			}
 
