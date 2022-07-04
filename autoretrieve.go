@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/url"
 	"os"
@@ -255,8 +256,21 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 				}
 
 				req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.AdvertiseToken))
-				if _, err := http.DefaultClient.Do(req); err != nil {
+				res, err := http.DefaultClient.Do(req)
+				if err != nil {
 					logger.Errorf("Failed to send Estuary heartbeat message: %v", err)
+				}
+				defer res.Body.Close()
+
+				// If we got a non-success status code, warn about the error
+				if res.StatusCode/100 != 2 {
+					resBytes, err := ioutil.ReadAll(res.Body)
+					resString := string(resBytes)
+
+					if err != nil {
+						resString = "could not read response"
+					}
+					logger.Errorf("Estuary heartbeat failed: %s", resString)
 				}
 			}
 		}()
