@@ -373,7 +373,7 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 		Token          string
 		LastConnection string
 		AddrInfo       peer.AddrInfo
-		Error          string
+		Error          interface{}
 	}
 	// outputStr, err := ioutil.ReadAll(res.Body)
 	if err := json.NewDecoder(res.Body).Decode(&output); err != nil {
@@ -390,6 +390,8 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	if err := WriteConfig(cfg, fullConfigPath(ctx)); err != nil {
 		return fmt.Errorf("failed to write config: %v", err)
 	}
+
+	fmt.Printf("Successfully registered\n")
 
 	return nil
 }
