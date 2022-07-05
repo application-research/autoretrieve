@@ -246,7 +246,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		}
 
 		go func() {
-			ticker := time.NewTicker(time.Hour * 6)
+			ticker := time.NewTicker(time.Minute * 5)
 			for ; true; <-ticker.C {
 				logger.Infof("Sending Estuary heartbeat message")
 
