@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -32,6 +33,7 @@ import (
 	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/libp2p/go-libp2p-core/host"
 	"github.com/libp2p/go-libp2p-core/network"
+	peer "github.com/libp2p/go-libp2p-core/peer"
 	"github.com/multiformats/go-multiaddr"
 	"github.com/urfave/cli/v2"
 )
@@ -246,7 +248,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		}
 
 		go func() {
-			ticker := time.NewTicker(time.Minute * 5)
+			ticker := time.NewTicker(cfg.AdvertiseInterval / 2)
 			for ; true; <-ticker.C {
 				logger.Infof("Sending Estuary heartbeat message")
 
@@ -271,6 +273,32 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 						resString = "could not read response"
 					}
 					logger.Errorf("Estuary heartbeat failed: %s", resString)
+				}
+
+				var output struct {
+					Handle            string
+					LastConnection    time.Time
+					LastAdvertisement time.Time
+					AddrInfo          peer.AddrInfo
+					AdvertiseInterval string
+					Error             interface{}
+				}
+				if err := json.NewDecoder(res.Body).Decode(&output); err != nil {
+
+					logger.Errorf("couldn't decode response: %v", err)
+				}
+
+				if output.Error != "" {
+					logger.Errorf("heartbeat failed: %s\n", output.Error)
+				}
+
+				advInterval, err := time.ParseDuration(output.AdvertiseInterval)
+				if err != nil {
+					logger.Errorf("could not parse AdvertiseInterval: %s\n", err)
+				}
+				if advInterval != cfg.AdvertiseInterval { // update advertisement interval
+					cfg.AdvertiseInterval = advInterval
+					ticker.Reset(cfg.AdvertiseInterval)
 				}
 			}
 		}()

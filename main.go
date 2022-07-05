@@ -14,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/application-research/autoretrieve/bitswap"
 	"github.com/application-research/autoretrieve/blocks"
@@ -369,11 +370,12 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	defer res.Body.Close()
 
 	var output struct {
-		Handle         string
-		Token          string
-		LastConnection string
-		AddrInfo       peer.AddrInfo
-		Error          interface{}
+		Handle            string
+		Token             string
+		LastConnection    string
+		AdvertiseInterval string
+		AddrInfo          peer.AddrInfo
+		Error             interface{}
 	}
 	// outputStr, err := ioutil.ReadAll(res.Body)
 	if err := json.NewDecoder(res.Body).Decode(&output); err != nil {
@@ -387,6 +389,13 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	cfg, err := LoadConfig(fullConfigPath(ctx))
 	cfg.AdvertiseEndpointURL = endpointURL
 	cfg.AdvertiseToken = output.Token
+
+	advInterval, err := time.ParseDuration(output.AdvertiseInterval)
+	if err != nil {
+		return fmt.Errorf("could not parse AdvertiseInterval: %s\n", err)
+	}
+	cfg.AdvertiseInterval = advInterval
+
 	if err := WriteConfig(cfg, fullConfigPath(ctx)); err != nil {
 		return fmt.Errorf("failed to write config: %v", err)
 	}

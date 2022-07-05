@@ -162,6 +162,7 @@ type MinerConfig struct {
 // All config values should be safe to leave uninitialized
 type Config struct {
 	AdvertiseEndpointURL string                   `yaml:"advertise-endpoint-url"`
+	AdvertiseInterval    time.Duration            `yaml:"advertise-interval"`
 	AdvertiseToken       string                   `yaml:"advertise-token"`
 	LookupEndpointType   EndpointType             `yaml:"lookup-endpoint-type"`
 	LookupEndpointURL    string                   `yaml:"lookup-endpoint-url"`
