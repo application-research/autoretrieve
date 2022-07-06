@@ -352,7 +352,7 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 
 	req, err := http.NewRequest(
 		"POST",
-		endpointURL,
+		endpointURL+"/admin/autoretrieve/init",
 		body,
 	)
 
@@ -382,12 +382,12 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 		return fmt.Errorf("couldn't decode response: %v", err)
 	}
 
-	if output.Error != "" {
-		return fmt.Errorf("registration failed: %s\n", output.Error)
+	if output.Error != nil && output.Error != "" {
+		return fmt.Errorf("registration failed: %v\n", output.Error)
 	}
 
 	cfg, err := LoadConfig(fullConfigPath(ctx))
-	cfg.AdvertiseEndpointURL = endpointURL
+	cfg.EstuaryURL = endpointURL
 	cfg.AdvertiseToken = output.Token
 
 	advInterval, err := time.ParseDuration(output.AdvertiseInterval)
@@ -400,7 +400,7 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 		return fmt.Errorf("failed to write config: %v", err)
 	}
 
-	fmt.Printf("Successfully registered\n")
+	logger.Infof("Successfully registered")
 
 	return nil
 }

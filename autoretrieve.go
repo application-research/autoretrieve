@@ -241,64 +241,23 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 	}
 
 	// Start Estuary heartbeat goroutine if an endpoint was specified
-	if cfg.AdvertiseEndpointURL != "" {
-		_, err := url.Parse(cfg.AdvertiseEndpointURL)
+	if cfg.EstuaryURL != "" {
+		_, err := url.Parse(cfg.EstuaryURL)
 		if err != nil {
 			return nil, fmt.Errorf("could not parse advertise endpoint URL: %w", err)
 		}
 
 		go func() {
+			logger.Infof("Starting estuary heartbeat ticker with AdvertiseInterval=%s", cfg.AdvertiseInterval.String())
 			ticker := time.NewTicker(cfg.AdvertiseInterval / 2)
+			if ticker == nil {
+				logger.Infof("Error setting ticker")
+			}
 			for ; true; <-ticker.C {
 				logger.Infof("Sending Estuary heartbeat message")
-
-				req, err := http.NewRequest("POST", cfg.AdvertiseEndpointURL, bytes.NewBuffer(nil))
+				err = sendEstuaryHeartbeat(&cfg, ticker)
 				if err != nil {
-					logger.Errorf("Failed to create Estuary heartbeat message: %v", err)
-				}
-
-				req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.AdvertiseToken))
-				res, err := http.DefaultClient.Do(req)
-				if err != nil {
-					logger.Errorf("Failed to send Estuary heartbeat message: %v", err)
-				}
-				defer res.Body.Close()
-
-				// If we got a non-success status code, warn about the error
-				if res.StatusCode/100 != 2 {
-					resBytes, err := ioutil.ReadAll(res.Body)
-					resString := string(resBytes)
-
-					if err != nil {
-						resString = "could not read response"
-					}
-					logger.Errorf("Estuary heartbeat failed: %s", resString)
-				}
-
-				var output struct {
-					Handle            string
-					LastConnection    time.Time
-					LastAdvertisement time.Time
-					AddrInfo          peer.AddrInfo
-					AdvertiseInterval string
-					Error             interface{}
-				}
-				if err := json.NewDecoder(res.Body).Decode(&output); err != nil {
-
-					logger.Errorf("couldn't decode response: %v", err)
-				}
-
-				if output.Error != "" {
-					logger.Errorf("heartbeat failed: %s\n", output.Error)
-				}
-
-				advInterval, err := time.ParseDuration(output.AdvertiseInterval)
-				if err != nil {
-					logger.Errorf("could not parse AdvertiseInterval: %s\n", err)
-				}
-				if advInterval != cfg.AdvertiseInterval { // update advertisement interval
-					cfg.AdvertiseInterval = advInterval
-					ticker.Reset(cfg.AdvertiseInterval)
+					logger.Errorf("Failed to send Estuary heartbeat message: %s", err)
 				}
 			}
 		}()
@@ -312,6 +271,58 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		provider:  provider,
 		apiCloser: apiCloser,
 	}, nil
+}
+
+func sendEstuaryHeartbeat(cfg *Config, ticker *time.Ticker) error {
+	req, err := http.NewRequest("POST", cfg.EstuaryURL+"/autoretrieve/heartbeat", bytes.NewBuffer(nil))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.AdvertiseToken))
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	// If we got a non-success status code, warn about the error
+	if res.StatusCode/100 != 2 {
+		resBytes, err := ioutil.ReadAll(res.Body)
+		resString := string(resBytes)
+
+		if err != nil {
+			resString = "could not read response"
+		}
+		return fmt.Errorf("%s", resString)
+	}
+
+	var output struct {
+		Handle            string
+		LastConnection    time.Time
+		LastAdvertisement time.Time
+		AddrInfo          peer.AddrInfo
+		AdvertiseInterval string
+		Error             interface{}
+	}
+	if err := json.NewDecoder(res.Body).Decode(&output); err != nil {
+
+		return fmt.Errorf("could not decode response: %v", err)
+	}
+
+	if output.Error != nil && output.Error != "" {
+		return fmt.Errorf("%v\n", output.Error)
+	}
+
+	advInterval, err := time.ParseDuration(output.AdvertiseInterval)
+	if err != nil {
+		return fmt.Errorf("could not parse AdvertiseInterval: %s", err)
+	}
+	if advInterval != cfg.AdvertiseInterval { // update advertisement interval
+		cfg.AdvertiseInterval = advInterval
+		ticker.Reset(cfg.AdvertiseInterval)
+	}
+	return nil
 }
 
 // TODO: this function should do a lot more to clean up resources and come to
