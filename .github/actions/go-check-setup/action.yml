@@ -1,0 +1,10 @@
+runs:
+  using: "composite"
+  steps:
+    - name: Prepare for FFI build
+      shell: bash
+      run: |
+        sudo apt-get install ocl-icd-opencl-dev libhwloc-dev -y
+    - name: Install & Build FFI
+      shell: bash
+      run: make all
