@@ -22,10 +22,12 @@ ifneq ($(ffi_expected_ref), $(ffi_current_ref))
 	cd $(ffi_dir) && git fetch $(ffi_remote) && git checkout $(filecoin_ffi_branch) && make
 endif
 
-$(ffi_checkout): # we don't have FFI checked out, clone and build
+$(ffi_checkout): ffi_checkout # we don't have FFI checked out, clone and build
+	cd $(ffi_dir) && make
+
+ffi_checkout:
 	@echo Cloning and rebuilding FFI ...
 	git clone $(ffi_remote) -b $(filecoin_ffi_branch) $(ffi_dir)
-	cd $(ffi_dir) && make
 
 clean:
 	rm -rf extern autoretrieve

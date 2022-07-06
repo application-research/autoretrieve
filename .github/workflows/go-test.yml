@@ -1,0 +1,43 @@
+# Based on https://github.com/protocol/.github/ templates
+
+on: [push, pull_request]
+name: Go Test
+
+jobs:
+  unit:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ "ubuntu", "macos" ]
+        go: [ "1.18.x" ]
+    env:
+      COVERAGES: ""
+    runs-on: ${{ format('{0}-latest', matrix.os) }}
+    name: ${{ matrix.os }} (go ${{ matrix.go }})
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: recursive
+      - uses: actions/setup-go@v2
+        with:
+          go-version: ${{ matrix.go }}
+      - name: Go information
+        run: |
+          go version
+          go env
+      - name: Run repo-specific setup
+        uses: ./.github/actions/go-test-setup
+        if: hashFiles('./.github/actions/go-test-setup') != ''
+      - name: Run tests
+        run: go test -v -coverprofile=module-coverage.txt -coverpkg=./... ./...
+      - name: Run tests with race detector
+        if: ${{ matrix.os == 'ubuntu' }}
+        run: go test -v -race ./...
+      - name: Collect coverage files
+        shell: bash
+        run: echo "COVERAGES=$(find . -type f -name 'module-coverage.txt' | tr -s '\n' ',' | sed 's/,$//')" >> $GITHUB_ENV
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@f32b3a3741e1053eb607407145bc9619351dc93b # v2.1.0
+        with:
+          files: '${{ env.COVERAGES }}'
+          env_vars: OS=${{ matrix.os }}, GO=${{ matrix.go }}
