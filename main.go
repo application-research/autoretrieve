@@ -206,6 +206,9 @@ func cmdTestBlockstore(ctx *cli.Context) error {
 
 	cset := cid.NewSet()
 	c, err := cid.Parse(ctx.Args().First())
+	if err != nil {
+		return err
+	}
 
 	var size int
 	var count int
