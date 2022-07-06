@@ -26,14 +26,13 @@ require (
 	github.com/ipfs/go-ipld-format v0.2.0
 	github.com/ipfs/go-log/v2 v2.5.1
 	github.com/ipfs/go-merkledag v0.5.1
-	github.com/ipfs/go-metrics-interface v0.0.1
-	github.com/ipfs/go-metrics-prometheus v0.0.2
 	github.com/ipfs/go-peertaskqueue v0.7.1
 	github.com/libp2p/go-libp2p v0.18.0
 	github.com/libp2p/go-libp2p-core v0.14.0
 	github.com/libp2p/go-libp2p-kad-dht v0.15.0
 	github.com/multiformats/go-multiaddr v0.5.0
 	github.com/prometheus/client_golang v1.12.1
+	github.com/stretchr/testify v1.7.1
 	github.com/urfave/cli/v2 v2.3.0
 	go.opencensus.io v0.23.0
 	gopkg.in/yaml.v2 v2.4.0
@@ -160,6 +159,7 @@ require (
 	github.com/ipfs/go-ipld-legacy v0.1.1 // indirect
 	github.com/ipfs/go-ipns v0.1.2 // indirect
 	github.com/ipfs/go-log v1.0.5 // indirect
+	github.com/ipfs/go-metrics-interface v0.0.1 // indirect
 	github.com/ipfs/go-path v0.2.1 // indirect
 	github.com/ipfs/go-unixfs v0.3.1 // indirect
 	github.com/ipfs/go-unixfsnode v1.4.0 // indirect
@@ -271,7 +271,6 @@ require (
 	github.com/sirupsen/logrus v1.8.1 // indirect
 	github.com/spacemonkeygo/spacelog v0.0.0-20180420211403-2296661a0572 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/stretchr/testify v1.7.1 // indirect
 	github.com/syndtr/goleveldb v1.0.0 // indirect
 	github.com/tj/go-spin v1.1.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
