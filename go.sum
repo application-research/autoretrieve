@@ -100,8 +100,6 @@ github.com/anmitsu/go-shlex v0.0.0-20161002113705-648efa622239/go.mod h1:2FmKhYU
 github.com/antihax/optional v1.0.0/go.mod h1:uupD/76wgC+ih3iEmQUL+0Ugr19nfwCT1kdvxnR2qWY=
 github.com/apache/thrift v0.12.0/go.mod h1:cp2SuWMxlEZw2r+iP2GNCdIi4C1qmUzdZFSVb+bacwQ=
 github.com/apache/thrift v0.13.0/go.mod h1:cp2SuWMxlEZw2r+iP2GNCdIi4C1qmUzdZFSVb+bacwQ=
-github.com/application-research/filclient v0.0.0-20220602175911-a6b8faf9f1cd h1:IF5gUAti2Dnqe6GoQS7oxAcj6Gy+RXYKEyM5tPFtJ3c=
-github.com/application-research/filclient v0.0.0-20220602175911-a6b8faf9f1cd/go.mod h1:QSOQ2dcnSvucj23jOg535mvTMezoNV0bdJbIySoDaOg=
 github.com/application-research/filclient v0.0.0-20220622165741-3ca6a3f3bc7a h1:Xw4boQwfwLqBV9dx69j43XOdokgFVjfZ+Dnd6l+KJw8=
 github.com/application-research/filclient v0.0.0-20220622165741-3ca6a3f3bc7a/go.mod h1:QSOQ2dcnSvucj23jOg535mvTMezoNV0bdJbIySoDaOg=
 github.com/armon/circbuf v0.0.0-20150827004946-bbbad097214e/go.mod h1:3U/XgcO3hCbHZ8TKRvWD2dDTCfh9M9ya+I9JpbB7O8o=
@@ -876,7 +874,6 @@ github.com/ipfs/go-merkledag v0.5.1 h1:tr17GPP5XtPhvPPiWtu20tSGZiZDuTaJRXBLcr79U
 github.com/ipfs/go-merkledag v0.5.1/go.mod h1:cLMZXx8J08idkp5+id62iVftUQV+HlYJ3PIhDfZsjA4=
 github.com/ipfs/go-metrics-interface v0.0.1 h1:j+cpbjYvu4R8zbleSs36gvB7jR+wsL2fGD6n0jO4kdg=
 github.com/ipfs/go-metrics-interface v0.0.1/go.mod h1:6s6euYU4zowdslK0GKHmqaIZ3j/b/tL7HTWtJ4VPgWY=
-github.com/ipfs/go-metrics-prometheus v0.0.2 h1:9i2iljLg12S78OhC6UAiXi176xvQGiZaGVF1CUVdE+s=
 github.com/ipfs/go-metrics-prometheus v0.0.2/go.mod h1:ELLU99AQQNi+zX6GCGm2lAgnzdSH3u5UVlCdqSXnEks=
 github.com/ipfs/go-mfs v0.2.1/go.mod h1:Woj80iuw4ajDnIP6+seRaoHpPsc9hmL0pk/nDNDWP88=
 github.com/ipfs/go-namesys v0.4.0/go.mod h1:jpJwzodyP8DZdWN6DShRjVZw6gaqMr4nQLBSxU5cR6E=
