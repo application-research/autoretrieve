@@ -134,7 +134,6 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		logger.Infof("Using default wallet address %s", walletAddr)
 	}
 
-	const maxTraversalLinks = 32 * (1 << 20)
 	fc, err := filclient.NewClient(
 		host,
 		api,
