@@ -237,11 +237,11 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 	if cfg.EstuaryURL != "" {
 		_, err := url.Parse(cfg.EstuaryURL)
 		if err != nil {
-			return nil, fmt.Errorf("could not parse advertise endpoint URL: %w", err)
+			return nil, fmt.Errorf("could not parse Estuary URL: %w", err)
 		}
 
 		go func() {
-			logger.Infof("Starting estuary heartbeat ticker with AdvertiseInterval=%s", cfg.AdvertiseInterval.String())
+			logger.Infof("Starting estuary heartbeat ticker with AdvertiseInterval=%s", cfg.AdvertiseInterval)
 			ticker := time.NewTicker(cfg.AdvertiseInterval / 2)
 			if ticker == nil {
 				logger.Infof("Error setting ticker")
@@ -312,9 +312,9 @@ func sendEstuaryHeartbeat(cfg *Config, ticker *time.Ticker) error {
 		return fmt.Errorf("could not parse AdvertiseInterval: %s", err)
 	}
 	if advInterval != cfg.AdvertiseInterval { // update advertisement interval
-		cfg.AdvertiseInterval = advInterval
-		ticker.Reset(cfg.AdvertiseInterval)
+		ticker.Reset(advInterval)
 	}
+	logger.Infof("Next Estuary heartbeat in %s", advInterval/2)
 	return nil
 }
 

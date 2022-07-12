@@ -254,7 +254,8 @@ func DefaultConfig() Config {
 			RetrievalTimeout:        1 * time.Minute,
 			MaxConcurrentRetrievals: 1,
 		},
-		MinerConfigs: make(map[ConfigStorageProvider]MinerConfig),
+		MinerConfigs:      make(map[ConfigStorageProvider]MinerConfig),
+		AdvertiseInterval: 6 * time.Hour,
 	}
 }
 
