@@ -19,6 +19,7 @@ import (
 	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/endpoint"
 	"github.com/application-research/autoretrieve/filecoin"
+	"github.com/application-research/autoretrieve/filecoin/eventrecorder"
 	"github.com/application-research/filclient"
 	"github.com/application-research/filclient/keystore"
 	"github.com/filecoin-project/go-address"
@@ -172,15 +173,12 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 			return nil, err
 		}
 
-		retriever, err = filecoin.NewRetriever(
-			retrieverCfg,
-			fc,
-			ep,
-			host,
-			api,
-			datastore,
-			blockManager,
-		)
+		var er *eventrecorder.EventRecorder
+		if cfg.EventRecorderEndpointURL != "" {
+			er = eventrecorder.NewEventRecorder(cfg.EventRecorderEndpointURL)
+		}
+
+		retriever, err = filecoin.NewRetriever(retrieverCfg, fc, ep, er)
 		if err != nil {
 			return nil, err
 		}
