@@ -173,8 +173,9 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 			return nil, err
 		}
 
-		var er *eventrecorder.EventRecorder
+		var er *eventrecorder.EventRecorder = nil
 		if cfg.EventRecorderEndpointURL != "" {
+			logger.Infof("Reporting events to %v", cfg.EventRecorderEndpointURL)
 			er = eventrecorder.NewEventRecorder(cfg.EventRecorderEndpointURL)
 		}
 
