@@ -248,9 +248,7 @@ func cmdGenConfig(ctx *cli.Context) error {
 
 	cfgPath := fullConfigPath(ctx)
 	fmt.Printf("Writing config to '%s'\n", cfgPath)
-	WriteConfig(cfg, cfgPath)
-
-	return nil
+	return WriteConfig(cfg, cfgPath)
 }
 
 func cmdPrintConfig(ctx *cli.Context) error {
