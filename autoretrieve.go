@@ -304,7 +304,7 @@ func sendEstuaryHeartbeat(cfg *Config, ticker *time.Ticker) error {
 	}
 
 	if output.Error != nil && output.Error != "" {
-		return fmt.Errorf("%v\n", output.Error)
+		return fmt.Errorf("%v", output.Error)
 	}
 
 	advInterval, err := time.ParseDuration(output.AdvertiseInterval)

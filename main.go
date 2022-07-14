@@ -377,16 +377,19 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	}
 
 	if output.Error != nil && output.Error != "" {
-		return fmt.Errorf("registration failed: %v\n", output.Error)
+		return fmt.Errorf("registration failed: %v", output.Error)
 	}
 
 	cfg, err := LoadConfig(fullConfigPath(ctx))
+	if err != nil {
+		return fmt.Errorf("could not load config: %s", err)
+	}
 	cfg.EstuaryURL = endpointURL
 	cfg.AdvertiseToken = output.Token
 
 	advInterval, err := time.ParseDuration(output.AdvertiseInterval)
 	if err != nil {
-		return fmt.Errorf("could not parse AdvertiseInterval: %s\n", err)
+		return fmt.Errorf("could not parse AdvertiseInterval: %s", err)
 	}
 	cfg.AdvertiseInterval = advInterval
 
