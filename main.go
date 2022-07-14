@@ -38,6 +38,13 @@ const (
 	configPath       = "config.yaml"
 )
 
+func init() {
+	// Needed by Lotus' GetGatewayAPI() call
+	if os.Getenv("FULLNODE_API_INFO") == "" {
+		os.Setenv("FULLNODE_API_INFO", "wss://api.chain.love")
+	}
+}
+
 func main() {
 	log.SetLogLevel("autoretrieve", "DEBUG")
 
