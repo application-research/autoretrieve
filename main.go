@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"mime/multipart"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -11,6 +14,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/application-research/autoretrieve/bitswap"
 	"github.com/application-research/autoretrieve/blocks"
@@ -24,6 +28,8 @@ import (
 	format "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-merkledag"
+	crypto "github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p-core/peer"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v2"
 )
@@ -98,11 +104,17 @@ func main() {
 			Action: cmdTestBlockstore,
 			Usage:  "Takes a CID argument and tries walking the DAG using the local blockstore",
 		},
+		{
+			Name:      "register-estuary",
+			Action:    cmdRegisterEstuary,
+			Usage:     "Automatically registers this instance with Estuary for content advertisement and updates the config as necessary",
+			ArgsUsage: "<endpoint url> <admin token>",
+		},
 	}
 
 	ctx := contextWithInterruptCancel()
 	if err := app.RunContext(ctx, os.Args); err != nil {
-		logger.Fatalf("%v", err)
+		fmt.Printf("%v\n", err)
 	}
 }
 
@@ -265,6 +277,127 @@ func cmdPrintConfig(ctx *cli.Context) error {
 	}
 
 	fmt.Printf("%s\n", string(bytes))
+
+	return nil
+}
+
+func cmdRegisterEstuary(ctx *cli.Context) error {
+	endpointURL := ctx.Args().Get(0)
+	token := ctx.Args().Get(1)
+
+	if endpointURL == "" {
+		return fmt.Errorf("an Estuary endpoint URL is required (first argument)")
+	}
+
+	if token == "" {
+		return fmt.Errorf("an Estuary admin token is required (second argument)")
+	}
+
+	// Get public IP address
+
+	publicIPRes, err := http.Get("http://ip-api.com/json")
+	if err != nil {
+		return fmt.Errorf("could not get public ip: %v", err)
+	}
+	defer publicIPRes.Body.Close()
+
+	var ipInfo struct {
+		Query string
+	}
+
+	if err := json.NewDecoder(publicIPRes.Body).Decode(&ipInfo); err != nil {
+		return fmt.Errorf("could not get public ip: %v", err)
+	}
+
+	fmt.Printf("Using IP: %s\n", ipInfo.Query)
+
+	// Get peer key
+
+	peerkey, err := loadPeerKey(dataDirPath(ctx))
+	if err != nil {
+		return fmt.Errorf("couldn't get peer key: %v", err)
+	}
+
+	// peerkeyPubProto, err := crypto.PublicKeyToProto(peerkey.GetPublic())
+	// if err != nil {
+	// 	return fmt.Errorf("couldn't get peer public key: %v", err)
+	// }
+
+	peerkeyPubBytes, err := crypto.MarshalPublicKey(peerkey.GetPublic())
+	if err != nil {
+		return fmt.Errorf("couldn't marshal peer public key: %v", err)
+	}
+	peerkeyPub := crypto.ConfigEncodeKey(peerkeyPubBytes)
+
+	peerID, err := peer.IDFromPrivateKey(peerkey)
+	if err != nil {
+		return fmt.Errorf("couldn't get peer ID from key: %v", err)
+	}
+
+	// fmt.Printf("Using peer ID: %s\n", peer)
+	fmt.Printf("Using public key: %s\n", peerkeyPub)
+
+	// Do registration
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	writer.WriteField("addresses", fmt.Sprintf("/ip4/%s/tcp/6746/p2p/%s", ipInfo.Query, peerID))
+	writer.WriteField("pubKey", peerkeyPub)
+	writer.Close()
+
+	req, err := http.NewRequest(
+		"POST",
+		endpointURL+"/admin/autoretrieve/init",
+		body,
+	)
+
+	if err != nil {
+		return fmt.Errorf("building registration request failed: %v", err)
+	}
+
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+
+	res, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("registration request failed: %v", err)
+	}
+	defer res.Body.Close()
+
+	var output struct {
+		Handle            string
+		Token             string
+		LastConnection    string
+		AdvertiseInterval string
+		AddrInfo          peer.AddrInfo
+		Error             interface{}
+	}
+	// outputStr, err := ioutil.ReadAll(res.Body)
+	if err := json.NewDecoder(res.Body).Decode(&output); err != nil {
+		return fmt.Errorf("couldn't decode response: %v", err)
+	}
+
+	if output.Error != nil && output.Error != "" {
+		return fmt.Errorf("registration failed: %v", output.Error)
+	}
+
+	cfg, err := LoadConfig(fullConfigPath(ctx))
+	if err != nil {
+		return fmt.Errorf("could not load config: %s", err)
+	}
+	cfg.EstuaryURL = endpointURL
+	cfg.AdvertiseToken = output.Token
+
+	advInterval, err := time.ParseDuration(output.AdvertiseInterval)
+	if err != nil {
+		return fmt.Errorf("could not parse AdvertiseInterval: %s", err)
+	}
+	cfg.AdvertiseInterval = advInterval
+
+	if err := WriteConfig(cfg, fullConfigPath(ctx)); err != nil {
+		return fmt.Errorf("failed to write config: %v", err)
+	}
+
+	logger.Infof("Successfully registered")
 
 	return nil
 }

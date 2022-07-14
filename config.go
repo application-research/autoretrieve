@@ -160,20 +160,21 @@ type MinerConfig struct {
 
 // All config values should be safe to leave uninitialized
 type Config struct {
-	AdvertiseEndpointURL string                   `yaml:"advertise-endpoint-url"`
-	AdvertiseToken       string                   `yaml:"advertise-token"`
-	LookupEndpointType   EndpointType             `yaml:"lookup-endpoint-type"`
-	LookupEndpointURL    string                   `yaml:"lookup-endpoint-url"`
-	MaxBitswapWorkers    uint                     `yaml:"max-bitswap-workers"`
-	RoutingTableType     bitswap.RoutingTableType `yaml:"routing-table-type"`
-	PruneThreshold       ConfigByteCount          `yaml:"prune-threshold"`
-	PinDuration          time.Duration            `yaml:"pin-duration"`
-	LogResourceManager   bool                     `yaml:"log-resource-manager"`
-	LogRetrievals        bool                     `yaml:"log-retrieval-stats"`
-	DisableRetrieval     bool                     `yaml:"disable-retrieval"`
-	CidBlacklist         []cid.Cid                `yaml:"cid-blacklist"`
-	MinerBlacklist       []ConfigStorageProvider  `yaml:"miner-blacklist"`
-	MinerWhitelist       []ConfigStorageProvider  `yaml:"miner-whitelist"`
+	EstuaryURL         string                   `yaml:"estuary-url"`
+	AdvertiseInterval  time.Duration            `yaml:"advertise-interval"`
+	AdvertiseToken     string                   `yaml:"advertise-token"`
+	LookupEndpointType EndpointType             `yaml:"lookup-endpoint-type"`
+	LookupEndpointURL  string                   `yaml:"lookup-endpoint-url"`
+	MaxBitswapWorkers  uint                     `yaml:"max-bitswap-workers"`
+	RoutingTableType   bitswap.RoutingTableType `yaml:"routing-table-type"`
+	PruneThreshold     ConfigByteCount          `yaml:"prune-threshold"`
+	PinDuration        time.Duration            `yaml:"pin-duration"`
+	LogResourceManager bool                     `yaml:"log-resource-manager"`
+	LogRetrievals      bool                     `yaml:"log-retrieval-stats"`
+	DisableRetrieval   bool                     `yaml:"disable-retrieval"`
+	CidBlacklist       []cid.Cid                `yaml:"cid-blacklist"`
+	MinerBlacklist     []ConfigStorageProvider  `yaml:"miner-blacklist"`
+	MinerWhitelist     []ConfigStorageProvider  `yaml:"miner-whitelist"`
 
 	DefaultMinerConfig MinerConfig                           `yaml:"default-miner-config"`
 	MinerConfigs       map[ConfigStorageProvider]MinerConfig `yaml:"miner-configs"`
@@ -253,7 +254,8 @@ func DefaultConfig() Config {
 			RetrievalTimeout:        1 * time.Minute,
 			MaxConcurrentRetrievals: 1,
 		},
-		MinerConfigs: make(map[ConfigStorageProvider]MinerConfig),
+		MinerConfigs:      make(map[ConfigStorageProvider]MinerConfig),
+		AdvertiseInterval: 6 * time.Hour,
 	}
 }
 
