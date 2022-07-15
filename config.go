@@ -176,7 +176,7 @@ type Config struct {
 	MinerBlacklist           []ConfigStorageProvider  `yaml:"miner-blacklist"`
 	MinerWhitelist           []ConfigStorageProvider  `yaml:"miner-whitelist"`
 	EventRecorderEndpointURL string                   `yaml:"event-recorder-endpoint-url"`
-	InstanceId             string                   `yaml:"instance-name"`
+	InstanceId               string                   `yaml:"instance-name"`
 
 	DefaultMinerConfig MinerConfig                           `yaml:"default-miner-config"`
 	MinerConfigs       map[ConfigStorageProvider]MinerConfig `yaml:"miner-configs"`
@@ -239,7 +239,7 @@ func LoadConfig(path string) (Config, error) {
 
 func DefaultConfig() Config {
 	return Config{
-		InstanceId:       "autoretrieve-unnamed",
+		InstanceId:         "autoretrieve-unnamed",
 		LookupEndpointType: EndpointTypeIndexer,
 		LookupEndpointURL:  "https://cid.contact",
 		MaxBitswapWorkers:  1,
