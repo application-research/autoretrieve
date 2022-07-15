@@ -176,7 +176,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		var er *eventrecorder.EventRecorder = nil
 		if cfg.EventRecorderEndpointURL != "" {
 			logger.Infof("Reporting events to %v", cfg.EventRecorderEndpointURL)
-			er = eventrecorder.NewEventRecorder(cfg.EventRecorderEndpointURL)
+			er = eventrecorder.NewEventRecorder(cfg.InstanceId, cfg.EventRecorderEndpointURL)
 		}
 
 		retriever, err = filecoin.NewRetriever(retrieverCfg, fc, ep, er)
