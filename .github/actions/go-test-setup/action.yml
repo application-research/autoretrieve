@@ -1,17 +1,9 @@
 runs:
   using: "composite"
   steps:
-    - name: Prepare for FFI build (macOS)
-      if: matrix.os == 'macos'
+    - name: Prepare for FFI build
       shell: bash
-      run: |
-        cargo install cargo-lipo
-        brew install hwloc
-    - name: Prepare for FFI build (Linux)
-      if: matrix.os == 'ubuntu'
-      shell: bash
-      run: |
-        sudo apt-get install ocl-icd-opencl-dev libhwloc-dev -y
+      run: make ffi_install_dependencies
     - name: Install & Build FFI
       shell: bash
       run: make all
