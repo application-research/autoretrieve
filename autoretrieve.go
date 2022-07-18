@@ -173,15 +173,13 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 			return nil, err
 		}
 
-		var er *eventrecorder.EventRecorder = nil
-		if cfg.EventRecorderEndpointURL != "" {
-			logger.Infof("Reporting events to %v", cfg.EventRecorderEndpointURL)
-			er = eventrecorder.NewEventRecorder(cfg.InstanceId, cfg.EventRecorderEndpointURL)
-		}
-
-		retriever, err = filecoin.NewRetriever(retrieverCfg, fc, ep, er)
+		retriever, err = filecoin.NewRetriever(retrieverCfg, fc, ep)
 		if err != nil {
 			return nil, err
+		}
+		if cfg.EventRecorderEndpointURL != "" {
+			logger.Infof("Reporting retrieval events to %v", cfg.EventRecorderEndpointURL)
+			retriever.RegisterListener(eventrecorder.NewEventRecorder(cfg.InstanceId, cfg.EventRecorderEndpointURL))
 		}
 		if cfg.LogRetrievals {
 			w := tabwriter.NewWriter(os.Stdout, 5, 0, 3, ' ', 0)
