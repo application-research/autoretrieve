@@ -202,10 +202,13 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				continue
 			}
 
-			provider.blockManager.GetAwait(ctx, entry.Cid, func(block blocks.Block) {
+			if err := provider.blockManager.GetAwait(ctx, entry.Cid, func(block blocks.Block) {
 				provider.queueHave(context.Background(), sender, entry, block.Cid())
 				provider.signalWork()
-			})
+			}); err != nil {
+				logger.Errorf("Failed to load block: %s", err.Error())
+				provider.queueDontHave(ctx, sender, entry, "failed_block_load")
+			}
 		case wantTypeBlock:
 			if err := provider.retriever.Request(entry.Cid); err != nil {
 				// If no candidates were found, there's nothing that can be done, so
@@ -213,16 +216,19 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
 
 				if !errors.Is(err, filecoin.ErrNoCandidates) {
-					logger.Errorf("Could not get candidates: %v")
+					logger.Errorf("Could not get candidates: %s", err.Error())
 				}
 
 				continue
 			}
 
-			provider.blockManager.GetAwait(ctx, entry.Cid, func(block blocks.Block) {
+			if err := provider.blockManager.GetAwait(ctx, entry.Cid, func(block blocks.Block) {
 				provider.queueBlock(context.Background(), sender, entry, block)
 				provider.signalWork()
-			})
+			}); err != nil {
+				logger.Errorf("Failed to load block: %s", err.Error())
+				provider.queueDontHave(ctx, sender, entry, "failed_block_load")
+			}
 		}
 	}
 
