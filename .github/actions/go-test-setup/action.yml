@@ -3,7 +3,11 @@ runs:
   steps:
     - name: Prepare for FFI build
       shell: bash
-      run: make ffi_install_dependencies
+      run: make ffi_install_dependencies  
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
     - name: Install & Build FFI
       shell: bash
       run: make all
+      env:
+        GITHUB_TOKEN: ${{ github.token }}
