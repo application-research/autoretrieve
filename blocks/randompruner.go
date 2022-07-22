@@ -81,7 +81,7 @@ func NewRandomPruner(
 
 	log.Infof("Initialized pruner's tracked size as %s", humanize.IBytes(size))
 
-	return &RandomPruner{
+	pruner := &RandomPruner{
 		Blockstore:  inner,
 		datastore:   datastore,
 		threshold:   cfg.Threshold,
@@ -90,7 +90,17 @@ func NewRandomPruner(
 		size:        size,
 
 		pins: make(map[cid.Cid]time.Time),
-	}, nil
+	}
+
+	// Poll immediately on startup and then periodically
+	pruner.Poll(ctx)
+	go func() {
+		for range time.Tick(time.Second * 10) {
+			pruner.Poll(ctx)
+		}
+	}()
+
+	return pruner, nil
 }
 
 func (pruner *RandomPruner) DeleteBlock(ctx context.Context, cid cid.Cid) error {
@@ -164,7 +174,7 @@ func (pruner *RandomPruner) Poll(ctx context.Context) {
 			go func() {
 				defer pruner.pruneLk.Unlock()
 
-				if err := pruner.prune(ctx, pruner.pruneBytes); err != nil {
+				if err := pruner.prune(context.Background(), pruner.pruneBytes); err != nil {
 					log.Errorf("Random pruner errored during prune: %v", err)
 				}
 			}()
