@@ -164,7 +164,7 @@ func (pruner *RandomPruner) Poll(ctx context.Context) {
 			go func() {
 				defer pruner.pruneLk.Unlock()
 
-				if err := pruner.prune(ctx, pruner.pruneBytes); err != nil {
+				if err := pruner.prune(context.Background(), pruner.pruneBytes); err != nil {
 					log.Errorf("Random pruner errored during prune: %v", err)
 				}
 			}()
