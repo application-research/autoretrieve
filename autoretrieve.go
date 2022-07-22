@@ -19,6 +19,7 @@ import (
 	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/endpoint"
 	"github.com/application-research/autoretrieve/filecoin"
+	"github.com/application-research/autoretrieve/filecoin/eventrecorder"
 	"github.com/application-research/filclient"
 	"github.com/application-research/filclient/keystore"
 	"github.com/filecoin-project/go-address"
@@ -172,17 +173,13 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 			return nil, err
 		}
 
-		retriever, err = filecoin.NewRetriever(
-			retrieverCfg,
-			fc,
-			ep,
-			host,
-			api,
-			datastore,
-			blockManager,
-		)
+		retriever, err = filecoin.NewRetriever(cctx.Context, retrieverCfg, fc, ep)
 		if err != nil {
 			return nil, err
+		}
+		if cfg.EventRecorderEndpointURL != "" {
+			logger.Infof("Reporting retrieval events to %v", cfg.EventRecorderEndpointURL)
+			retriever.RegisterListener(eventrecorder.NewEventRecorder(cfg.InstanceId, cfg.EventRecorderEndpointURL))
 		}
 		if cfg.LogRetrievals {
 			w := tabwriter.NewWriter(os.Stdout, 5, 0, 3, ' ', 0)

@@ -9,6 +9,7 @@ services:
       - AUTORETRIEVE_USE_FULLRT
       - AUTORETRIEVE_LOG_RESOURCE_MANAGER
       - AUTORETRIEVE_LOG_RETRIEVALS
+      - GOLOG_LOG_LEVEL
     ports: 
       - "6746:6746"
     volumes:
