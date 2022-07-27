@@ -196,7 +196,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
 
 				if !errors.Is(err, filecoin.ErrNoCandidates) {
-					logger.Errorf("Could not get candidates: %v")
+					logger.Errorf("Could not get candidates: %s", err.Error())
 				}
 
 				continue
@@ -236,7 +236,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 }
 
 func (provider *Provider) ReceiveError(err error) {
-	logger.Errorf("Error receiving bitswap message: %v", err)
+	logger.Errorf("Error receiving bitswap message: %s", err.Error())
 }
 
 func (provider *Provider) PeerConnected(peer peer.ID) {}
@@ -283,7 +283,7 @@ func (provider *Provider) runWorker() {
 		msg.SetPendingBytes(int32(pending))
 
 		if err := provider.network.SendMessage(context.Background(), peer, msg); err != nil {
-			logger.Errorf("Failed to send message %#v: %v", msg, err)
+			logger.Errorf("Failed to send message %#v: %s", msg, err.Error())
 		}
 
 		provider.taskQueue.TasksDone(peer, tasks...)

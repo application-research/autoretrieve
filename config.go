@@ -160,21 +160,23 @@ type MinerConfig struct {
 
 // All config values should be safe to leave uninitialized
 type Config struct {
-	EstuaryURL         string                   `yaml:"estuary-url"`
-	AdvertiseInterval  time.Duration            `yaml:"advertise-interval"`
-	AdvertiseToken     string                   `yaml:"advertise-token"`
-	LookupEndpointType EndpointType             `yaml:"lookup-endpoint-type"`
-	LookupEndpointURL  string                   `yaml:"lookup-endpoint-url"`
-	MaxBitswapWorkers  uint                     `yaml:"max-bitswap-workers"`
-	RoutingTableType   bitswap.RoutingTableType `yaml:"routing-table-type"`
-	PruneThreshold     ConfigByteCount          `yaml:"prune-threshold"`
-	PinDuration        time.Duration            `yaml:"pin-duration"`
-	LogResourceManager bool                     `yaml:"log-resource-manager"`
-	LogRetrievals      bool                     `yaml:"log-retrieval-stats"`
-	DisableRetrieval   bool                     `yaml:"disable-retrieval"`
-	CidBlacklist       []cid.Cid                `yaml:"cid-blacklist"`
-	MinerBlacklist     []ConfigStorageProvider  `yaml:"miner-blacklist"`
-	MinerWhitelist     []ConfigStorageProvider  `yaml:"miner-whitelist"`
+	EstuaryURL               string                   `yaml:"estuary-url"`
+	AdvertiseInterval        time.Duration            `yaml:"advertise-interval"`
+	AdvertiseToken           string                   `yaml:"advertise-token"`
+	LookupEndpointType       EndpointType             `yaml:"lookup-endpoint-type"`
+	LookupEndpointURL        string                   `yaml:"lookup-endpoint-url"`
+	MaxBitswapWorkers        uint                     `yaml:"max-bitswap-workers"`
+	RoutingTableType         bitswap.RoutingTableType `yaml:"routing-table-type"`
+	PruneThreshold           ConfigByteCount          `yaml:"prune-threshold"`
+	PinDuration              time.Duration            `yaml:"pin-duration"`
+	LogResourceManager       bool                     `yaml:"log-resource-manager"`
+	LogRetrievals            bool                     `yaml:"log-retrieval-stats"`
+	DisableRetrieval         bool                     `yaml:"disable-retrieval"`
+	CidBlacklist             []cid.Cid                `yaml:"cid-blacklist"`
+	MinerBlacklist           []ConfigStorageProvider  `yaml:"miner-blacklist"`
+	MinerWhitelist           []ConfigStorageProvider  `yaml:"miner-whitelist"`
+	EventRecorderEndpointURL string                   `yaml:"event-recorder-endpoint-url"`
+	InstanceId               string                   `yaml:"instance-name"`
 
 	DefaultMinerConfig MinerConfig                           `yaml:"default-miner-config"`
 	MinerConfigs       map[ConfigStorageProvider]MinerConfig `yaml:"miner-configs"`
@@ -237,6 +239,7 @@ func LoadConfig(path string) (Config, error) {
 
 func DefaultConfig() Config {
 	return Config{
+		InstanceId:         "autoretrieve-unnamed",
 		LookupEndpointType: EndpointTypeIndexer,
 		LookupEndpointURL:  "https://cid.contact",
 		MaxBitswapWorkers:  1,
