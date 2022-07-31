@@ -179,7 +179,11 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		}
 		if cfg.EventRecorderEndpointURL != "" {
 			logger.Infof("Reporting retrieval events to %v", cfg.EventRecorderEndpointURL)
-			retriever.RegisterListener(eventrecorder.NewEventRecorder(cfg.InstanceId, cfg.EventRecorderEndpointURL))
+			eventRecorderEndpointAuthorization, err := loadEventRecorderAuth(dataDirPath(cctx))
+			if err != nil {
+				return nil, err
+			}
+			retriever.RegisterListener(eventrecorder.NewEventRecorder(cfg.InstanceId, cfg.EventRecorderEndpointURL, eventRecorderEndpointAuthorization))
 		}
 		if cfg.LogRetrievals {
 			w := tabwriter.NewWriter(os.Stdout, 5, 0, 3, ' ', 0)
@@ -320,6 +324,18 @@ func sendEstuaryHeartbeat(cfg *Config, ticker *time.Ticker) error {
 func (autoretrieve *Autoretrieve) Close() {
 	autoretrieve.apiCloser()
 	autoretrieve.host.Close()
+}
+
+func loadEventRecorderAuth(dataDir string) (string, error) {
+	authPath := filepath.Join(dataDir, "eventrecorderauth")
+	eventRecorderAuth, err := os.ReadFile(authPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+		return "", nil
+	}
+	return string(eventRecorderAuth), nil
 }
 
 func loadPeerKey(dataDir string) (crypto.PrivKey, error) {
