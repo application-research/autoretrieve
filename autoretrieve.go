@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -335,7 +336,7 @@ func loadEventRecorderAuth(dataDir string) (string, error) {
 		}
 		return "", nil
 	}
-	return string(eventRecorderAuth), nil
+	return strings.TrimSuffix(string(eventRecorderAuth), "\n"), nil
 }
 
 func loadPeerKey(dataDir string) (crypto.PrivKey, error) {
