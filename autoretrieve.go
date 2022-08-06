@@ -184,7 +184,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 			if err != nil {
 				return nil, err
 			}
-			retriever.RegisterListener(eventrecorder.NewEventRecorder(cfg.InstanceId, cfg.EventRecorderEndpointURL, eventRecorderEndpointAuthorization))
+			retriever.RegisterListener(eventrecorder.NewEventRecorder(cctx.Context, cfg.InstanceId, cfg.EventRecorderEndpointURL, eventRecorderEndpointAuthorization))
 		}
 		if cfg.LogRetrievals {
 			w := tabwriter.NewWriter(os.Stdout, 5, 0, 3, ' ', 0)

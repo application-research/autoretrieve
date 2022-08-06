@@ -2,6 +2,7 @@ package eventrecorder
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -16,22 +17,47 @@ import (
 	"github.com/libp2p/go-libp2p-core/peer"
 )
 
+var HttpTimeout = 5 * time.Second
+var ParallelPosters = 5
+
 var _ filecoin.RetrievalEventListener = (*EventRecorder)(nil)
 
 var log = logging.Logger("eventrecorder")
 
 // NewEventRecorder creates a new event recorder with the ID of this instance
 // and the URL to POST to
-func NewEventRecorder(instanceId string, endpointURL string, endpointAuthorization string) *EventRecorder {
-	return &EventRecorder{instanceId, endpointURL, endpointAuthorization}
+func NewEventRecorder(ctx context.Context, instanceId string, endpointURL string, endpointAuthorization string) *EventRecorder {
+	er := &EventRecorder{
+		ctx,
+		instanceId,
+		endpointURL,
+		endpointAuthorization,
+		make(chan report),
+		make(chan report),
+	}
+
+	go er.ingestReports()
+	for i := 0; i < ParallelPosters; i++ {
+		go er.postReports()
+	}
+
+	return er
+}
+
+type report struct {
+	src string
+	evt eventReport
 }
 
 // EventRecorder receives events from the retrieval manager and posts event data
 // to a given endpoint as POSTs with JSON bodies
 type EventRecorder struct {
+	ctx                   context.Context
 	instanceId            string
 	endpointURL           string
 	endpointAuthorization string
+	incomingReportChan    chan report
+	reportChan            chan report
 }
 
 type eventReport struct {
@@ -109,34 +135,81 @@ func (er *EventRecorder) RetrievalFailure(retrievalId uuid.UUID, phaseStartTime,
 }
 
 func (er *EventRecorder) recordEvent(eventSource string, evt eventReport) {
-	byts, err := json.Marshal(evt)
-	if err != nil {
-		log.Errorf("Failed to JSONify and encode event [%s]: %w", eventSource, err.Error())
-		return
+	select {
+	case <-er.ctx.Done():
+	case er.incomingReportChan <- report{eventSource, evt}:
 	}
+}
 
-	req, err := http.NewRequest("POST", er.endpointURL, bytes.NewBufferString(string(byts)))
-	if err != nil {
-		log.Errorf("Failed to create POST request [%s] for recorder [%s]: %w", eventSource, er.endpointURL, err.Error())
-		return
+func (er *EventRecorder) ingestReports() {
+	var queuedReports []report
+	var nextReport report
+	var reportChan chan report = nil
+	for {
+		select {
+		case <-er.ctx.Done():
+			return
+		// read incoming report
+		case report := <-er.incomingReportChan:
+			if reportChan == nil {
+				// if queue had been idle, reactivate and set this report to publish next
+				reportChan = er.reportChan
+				nextReport = report
+			} else {
+				// otherwise, add it to the outgoing queue once the current one finishes
+				queuedReports = append(queuedReports, report)
+			}
+		// send outgoing report when queue is active (when reportChan == nil, this path is never followed)
+		case reportChan <- nextReport:
+			if len(queuedReports) > 0 {
+				// if we haven't exhausted our queue, then add the next report for posting
+				nextReport = queuedReports[0]
+				queuedReports = queuedReports[1:]
+			} else {
+				// otherwise, deactivate posting cause we are now idle
+				reportChan = nil
+			}
+		}
 	}
+}
 
-	req.Header.Set("Content-Type", "application/json")
+func (er *EventRecorder) postReports() {
+	client := http.Client{Timeout: HttpTimeout}
 
-	// set authorization header if configured
-	if er.endpointAuthorization != "" {
-		req.Header.Set("Authorization", fmt.Sprintf("Basic %s", er.endpointAuthorization))
-	}
+	for {
+		select {
+		case <-er.ctx.Done():
+			return
+		case report := <-er.reportChan:
+			byts, err := json.Marshal(report.evt)
+			if err != nil {
+				log.Errorf("Failed to JSONify and encode event [%s]: %w", report.src, err.Error())
+				return
+			}
 
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		log.Errorf("Failed to POST event [%s] to recorder [%s]: %w", eventSource, er.endpointURL, err.Error())
-		return
-	}
+			req, err := http.NewRequest("POST", er.endpointURL, bytes.NewBufferString(string(byts)))
+			if err != nil {
+				log.Errorf("Failed to create POST request [%s] for recorder [%s]: %w", report.src, er.endpointURL, err.Error())
+				return
+			}
 
-	defer resp.Body.Close() // error not so important at this point
+			req.Header.Set("Content-Type", "application/json")
 
-	if resp.StatusCode <= 200 || resp.StatusCode >= 299 {
-		log.Errorf("Expected success response code from event recorder server, got: %s", http.StatusText(resp.StatusCode))
+			// set authorization header if configured
+			if er.endpointAuthorization != "" {
+				req.Header.Set("Authorization", fmt.Sprintf("Basic %s", er.endpointAuthorization))
+			}
+
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Errorf("Failed to POST event [%s] to recorder [%s]: %w", report.src, er.endpointURL, err.Error())
+				return
+			}
+
+			defer resp.Body.Close() // error not so important at this point
+			if resp.StatusCode <= 200 || resp.StatusCode >= 299 {
+				log.Errorf("Expected success response code from event recorder server, got: %s", http.StatusText(resp.StatusCode))
+			}
+		}
 	}
 }
