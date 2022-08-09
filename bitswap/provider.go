@@ -13,7 +13,7 @@ import (
 	"github.com/ipfs/go-bitswap/network"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
-	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	ipld "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-peertaskqueue"
 	"github.com/ipfs/go-peertaskqueue/peertask"
@@ -157,14 +157,14 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 
 			// If there was a problem (aside from block not found), log and move
 			// on
-			if err != nil && !errors.Is(err, blockstore.ErrNotFound) {
+			if err != nil && !ipld.IsNotFound(err) {
 				logger.Warnf("Failed to get block for bitswap entry: %s", entry.Cid)
 				continue
 			}
 
 			// As long as no not found error was hit, queue the block and move
 			// on...
-			if !errors.Is(err, blockstore.ErrNotFound) {
+			if !ipld.IsNotFound(err) {
 				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
 				provider.queueBlock(ctx, sender, entry, block)
 				continue

@@ -1,5 +1,5 @@
 # commit or branch for the extern/filecoin-ffi dependency
-filecoin_ffi_branch = 5d00bb4365a97890
+filecoin_ffi_branch = 32afd6e1f1419b6b
 
 ffi_remote = https://github.com/filecoin-project/filecoin-ffi
 ffi_dir = extern/filecoin-ffi
