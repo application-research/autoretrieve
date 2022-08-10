@@ -3,7 +3,6 @@ package blocks
 import (
 	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"math/rand"
@@ -17,6 +16,7 @@ import (
 	"github.com/ipfs/go-cid"
 	flatfs "github.com/ipfs/go-ds-flatfs"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	ipld "github.com/ipfs/go-ipld-format"
 )
 
 type RandomPrunerConfig struct {
@@ -268,7 +268,7 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 			// a row; this strategy might not work super effectively when
 			// pruneBytes is close to the threshold, and could possibly be
 			// remedied by deleting CIDs from the file after reading them
-			if errors.Is(err, blockstore.ErrNotFound) {
+			if ipld.IsNotFound(err) {
 				notFoundCount++
 				if notFoundCount > 10 {
 					break

@@ -2,13 +2,13 @@ package blocks
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 
 	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
+	ipld "github.com/ipfs/go-ipld-format"
 	logging "github.com/ipfs/go-log/v2"
 )
 
@@ -58,7 +58,7 @@ func (mgr *Manager) GetAwait(ctx context.Context, cid cid.Cid, callback func(Blo
 	// If we couldn't get the block, we add it to the waitlist - the block will
 	// be populated later during a Put or PutMany event
 	if err != nil {
-		if !errors.Is(err, blockstore.ErrNotFound) {
+		if !ipld.IsNotFound(err) {
 			mgr.waitListLk.Unlock()
 			return err
 		}
