@@ -174,7 +174,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 			return nil, err
 		}
 
-		retriever, err = filecoin.NewRetriever(cctx.Context, retrieverCfg, fc, ep)
+		retriever, err = filecoin.NewRetriever(cctx.Context, retrieverCfg, fc, ep, blockManager)
 		if err != nil {
 			return nil, err
 		}
