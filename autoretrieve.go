@@ -27,6 +27,7 @@ import (
 	datatransfer "github.com/filecoin-project/go-data-transfer"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	lcli "github.com/filecoin-project/lotus/cli"
+	"github.com/ipfs/go-cid"
 	flatfs "github.com/ipfs/go-ds-flatfs"
 	leveldb "github.com/ipfs/go-ds-leveldb"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
@@ -174,7 +175,11 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 			return nil, err
 		}
 
-		retriever, err = filecoin.NewRetriever(cctx.Context, retrieverCfg, fc, ep, blockManager)
+		confirmer := func(c cid.Cid) (bool, error) {
+			return blockManager.Has(cctx.Context, c)
+		}
+
+		retriever, err = filecoin.NewRetriever(cctx.Context, retrieverCfg, fc, ep, confirmer)
 		if err != nil {
 			return nil, err
 		}
