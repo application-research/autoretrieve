@@ -4,11 +4,11 @@ go 1.18
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.0
-	github.com/application-research/filclient v0.0.0-20220808234731-c518ff0013aa
+	github.com/application-research/filclient v0.2.1-0.20220914021255-d86e50f050c4
 	github.com/dustin/go-humanize v1.0.0
 	github.com/filecoin-project/go-address v1.0.0
 	github.com/filecoin-project/go-data-transfer v1.15.2
-	github.com/filecoin-project/go-fil-markets v1.23.1
+	github.com/filecoin-project/go-fil-markets v1.23.2
 	github.com/filecoin-project/go-state-types v0.1.10
 	github.com/filecoin-project/index-provider v0.8.1
 	github.com/filecoin-project/lotus v1.17.0
@@ -86,8 +86,8 @@ require (
 	github.com/elastic/go-windows v1.0.0 // indirect
 	github.com/elastic/gosigar v0.14.2 // indirect
 	github.com/fatih/color v1.13.0 // indirect
-	github.com/filecoin-project/boost v1.2.1-0.20220803131342-cfcd4837136d // indirect
-	github.com/filecoin-project/dagstore v0.5.2 // indirect
+	github.com/filecoin-project/boost v1.3.1 // indirect
+	github.com/filecoin-project/dagstore v0.5.3 // indirect
 	github.com/filecoin-project/filecoin-ffi v0.30.4-0.20200910194244-f640612a1a1f // indirect
 	github.com/filecoin-project/go-amt-ipld/v2 v2.1.0 // indirect
 	github.com/filecoin-project/go-amt-ipld/v3 v3.1.0 // indirect
