@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"mime/multipart"
 	"net/http"
 	_ "net/http/pprof"
@@ -368,6 +369,15 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	}
 	defer res.Body.Close()
 
+	// Extract the body as a string first, and then reassign res.Body to a new
+	// reader from those bytes so it can be used again later
+	bodyBytes, err := io.ReadAll(res.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read body bytes: %v", err)
+	}
+	bodyStr := string(bodyBytes)
+	res.Body = io.NopCloser(bytes.NewReader(bodyBytes))
+
 	var output struct {
 		Handle            string
 		Token             string
@@ -378,6 +388,7 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	}
 	// outputStr, err := ioutil.ReadAll(res.Body)
 	if err := json.NewDecoder(res.Body).Decode(&output); err != nil {
+		fmt.Printf("%s\n", bodyStr)
 		return fmt.Errorf("couldn't decode response: %v", err)
 	}
 
