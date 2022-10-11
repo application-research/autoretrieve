@@ -172,6 +172,7 @@ type Config struct {
 	LogResourceManager       bool                     `yaml:"log-resource-manager"`
 	LogRetrievals            bool                     `yaml:"log-retrieval-stats"`
 	DisableRetrieval         bool                     `yaml:"disable-retrieval"`
+	PaidRetrievals           bool                     `yaml:"paid-retrievals"`
 	CidBlacklist             []cid.Cid                `yaml:"cid-blacklist"`
 	MinerBlacklist           []ConfigStorageProvider  `yaml:"miner-blacklist"`
 	MinerWhitelist           []ConfigStorageProvider  `yaml:"miner-whitelist"`
@@ -184,7 +185,6 @@ type Config struct {
 
 // Extract relevant config points into a filecoin retriever config
 func (cfg *Config) ExtractFilecoinRetrieverConfig(ctx context.Context, fc *filclient.FilClient) (filecoin.RetrieverConfig, error) {
-
 	convertedMinerCfgs := make(map[peer.ID]filecoin.MinerConfig)
 	for provider, minerCfg := range cfg.MinerConfigs {
 		peer, err := provider.GetPeerID(ctx, fc)
@@ -210,6 +210,7 @@ func (cfg *Config) ExtractFilecoinRetrieverConfig(ctx context.Context, fc *filcl
 		MinerWhitelist:     whitelist,
 		DefaultMinerConfig: filecoin.MinerConfig(cfg.DefaultMinerConfig),
 		MinerConfigs:       convertedMinerCfgs,
+		PaidRetrievals:     cfg.PaidRetrievals,
 	}, nil
 }
 
@@ -249,6 +250,7 @@ func DefaultConfig() Config {
 		LogResourceManager: false,
 		LogRetrievals:      false,
 		DisableRetrieval:   false,
+		PaidRetrievals:     false,
 		CidBlacklist:       nil,
 		MinerBlacklist:     nil,
 		MinerWhitelist:     nil,

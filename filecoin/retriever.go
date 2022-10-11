@@ -52,9 +52,10 @@ type RetrieverConfig struct {
 	MinerWhitelist     map[peer.ID]bool
 	DefaultMinerConfig MinerConfig
 	MinerConfigs       map[peer.ID]MinerConfig
+	PaidRetrievals     bool
 }
 
-func (cfg *RetrieverConfig) MinerConfig(peer peer.ID) MinerConfig {
+func (cfg *RetrieverConfig) GetMinerConfig(peer peer.ID) MinerConfig {
 	minerCfg := cfg.DefaultMinerConfig
 
 	if individual, ok := cfg.MinerConfigs[peer]; ok {
@@ -74,7 +75,7 @@ type Retriever struct {
 	// Assumed immutable during operation
 	config           RetrieverConfig
 	endpoint         Endpoint
-	filClient        *filclient.FilClient
+	filClient        FilClient
 	eventManager     *EventManager
 	activeRetrievals *ActiveRetrievalsManager
 	minerMonitor     *minerMonitor
@@ -95,14 +96,26 @@ type Endpoint interface {
 	FindCandidates(context.Context, cid.Cid) ([]RetrievalCandidate, error)
 }
 
+type FilClient interface {
+	RetrievalQueryToPeer(ctx context.Context, minerPeer peer.AddrInfo, pcid cid.Cid) (*retrievalmarket.QueryResponse, error)
+
+	RetrieveContentFromPeerWithProgressCallback(
+		ctx context.Context,
+		peerID peer.ID,
+		minerWallet address.Address,
+		proposal *retrievalmarket.DealProposal,
+		progressCallback func(bytesReceived uint64),
+	) (*filclient.RetrievalStats, error)
+
+	SubscribeToRetrievalEvents(subscriber rep.RetrievalSubscriber)
+}
+
 type BlockConfirmer func(c cid.Cid) (bool, error)
 
-// Possible errors: ErrInitKeystoreFailed, ErrInitWalletFailed,
-// ErrInitFilClientFailed
 func NewRetriever(
 	ctx context.Context,
 	config RetrieverConfig,
-	filClient *filclient.FilClient,
+	filClient FilClient,
 	endpoint Endpoint,
 	confirmer BlockConfirmer,
 ) (*Retriever, error) {
@@ -184,6 +197,20 @@ func (retriever *Retriever) Request(cid cid.Cid) error {
 // Possible errors: ErrAllRetrievalsFailed
 func (retriever *Retriever) retrieveFromBestCandidate(ctx context.Context, retrievalId uuid.UUID, retrievalCid cid.Cid, candidates []RetrievalCandidate) error {
 	queries := retriever.queryCandidates(ctx, retrievalId, retrievalCid, candidates)
+
+	if !retriever.config.PaidRetrievals {
+		// filter out paid retrievals
+		ii := 0
+		zero := big.Zero()
+		for _, q := range queries {
+			if totalCost(q.response).Equals(zero) {
+				queries[ii] = q
+				ii++
+			}
+		}
+		queries = queries[:ii]
+	}
+
 	// register that we have this many candidates to retrieve from, so that when we
 	// receive success or failures from that many we know the phase is completed,
 	// if zero at this point then clean-up will occur
@@ -220,7 +247,7 @@ func (retriever *Retriever) retrieveFromBestCandidate(ctx context.Context, retri
 	// complete
 	var retrievalStats *filclient.RetrievalStats
 	for _, query := range queries {
-		minerConfig := retriever.config.MinerConfig(query.candidate.MinerPeer.ID)
+		minerConfig := retriever.config.GetMinerConfig(query.candidate.MinerPeer.ID)
 		if err := retriever.activeRetrievals.SetRetrievalCandidate(
 			retrievalCid,
 			query.candidate.RootCid,
@@ -302,7 +329,7 @@ func (retriever *Retriever) retrieve(ctx context.Context, query candidateQuery) 
 	timedOut := false
 	var lastBytesReceivedTimer *time.Timer
 
-	minerCfgs := retriever.config.MinerConfigs[query.candidate.MinerPeer.ID]
+	minerCfgs := retriever.config.GetMinerConfig(query.candidate.MinerPeer.ID)
 
 	// Start the timeout tracker only if retrieval timeout isn't 0
 	if minerCfgs.RetrievalTimeout != 0 {
@@ -403,7 +430,7 @@ func (retriever *Retriever) lookupCandidates(ctx context.Context, cid cid.Cid) (
 		// Skip if we are currently at our maximum concurrent retrievals for this SP
 		// since we likely won't be able to retrieve from them at the moment even if
 		// query is successful
-		minerConfig := retriever.config.MinerConfig(candidate.MinerPeer.ID)
+		minerConfig := retriever.config.GetMinerConfig(candidate.MinerPeer.ID)
 		if minerConfig.MaxConcurrentRetrievals > 0 &&
 			retriever.activeRetrievals.GetActiveRetrievalCountFor(candidate.MinerPeer.ID) > minerConfig.MaxConcurrentRetrievals {
 			continue
@@ -423,10 +450,11 @@ func (retriever *Retriever) queryCandidates(ctx context.Context, retrievalId uui
 	wg.Add(len(candidates))
 
 	for i, candidate := range candidates {
+		candidate := candidate
 		go func(i int, candidate RetrievalCandidate) {
 			defer wg.Done()
 
-			minerCfgs := retriever.config.MinerConfigs[candidate.MinerPeer.ID]
+			minerCfgs := retriever.config.GetMinerConfig(candidate.MinerPeer.ID)
 			if minerCfgs.RetrievalTimeout != 0 {
 				var cancelFunc func()
 				ctx, cancelFunc = context.WithDeadline(ctx, time.Now().Add(minerCfgs.RetrievalTimeout))
