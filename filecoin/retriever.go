@@ -450,7 +450,6 @@ func (retriever *Retriever) queryCandidates(ctx context.Context, retrievalId uui
 	wg.Add(len(candidates))
 
 	for i, candidate := range candidates {
-		candidate := candidate
 		go func(i int, candidate RetrievalCandidate) {
 			defer wg.Done()
 
