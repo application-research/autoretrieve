@@ -200,15 +200,14 @@ func (retriever *Retriever) retrieveFromBestCandidate(ctx context.Context, retri
 
 	if !retriever.config.PaidRetrievals {
 		// filter out paid retrievals
-		ii := 0
+		qt := make([]candidateQuery, 0)
 		zero := big.Zero()
 		for _, q := range queries {
 			if totalCost(q.response).Equals(zero) {
-				queries[ii] = q
-				ii++
+				qt = append(qt, q)
 			}
 		}
-		queries = queries[:ii]
+		queries = qt
 	}
 
 	// register that we have this many candidates to retrieve from, so that when we
