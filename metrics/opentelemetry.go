@@ -16,7 +16,7 @@ var (
 	BitswapRequestWithIndexerCandidatesCount = stats.Int64("bitswap_request_with_indexer_candidates_total", "The number of bitswap requests that result in non-zero candidates from the indexer", stats.UnitDimensionless)
 	BitswapRequestWithSuccessfulQueryCount   = stats.Int64("bitswap_request_with_successful_query_total", "The number of bitswap requests that result in non-zero number of successful queries from SPs", stats.UnitDimensionless)
 	IndexerCandidatesCount                   = stats.Int64("indexer_candidates_total", "The retrieval candidates received from the indexer", stats.UnitDimensionless)
-	RetrievalQueryCount                      = stats.Int64("retrieval_request_total", "The number of retrieval deals initiated with storage providers", stats.UnitDimensionless)
+	RetrievalQueryCount                      = stats.Int64("retrieval_query_total", "The number of retrieval queries initiated with storage providers", stats.UnitDimensionless)
 	RetrievalDealCost                        = stats.Int64("retrieval_deal_cost_fil", "The cost in FIL of a retrieval deal with a storage provider", stats.UnitDimensionless)
 	RetrievalDealActiveCount                 = stats.Int64("retrieval_deal_active_total", "The number of active retrieval deals that have not yet succeeded or failed", stats.UnitDimensionless)
 	RetrievalDealDuration                    = stats.Float64("retrieval_deal_duration_seconds", "The duration in seconds of a retrieval deal with a storage provider", stats.UnitSeconds)
