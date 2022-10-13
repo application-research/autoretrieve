@@ -24,7 +24,6 @@ var (
 	RetrievalDealSize                        = stats.Int64("retrieval_deal_size_bytes", "The size in bytes of a retrieval deal with a storage provider", stats.UnitDimensionless)
 	RetrievalDealSuccessCount                = stats.Int64("retrieval_deal_success_total", "The number of successful retrieval deals with storage providers", stats.UnitDimensionless)
 	RetrievalRequestCount                    = stats.Int64("retrieval_request_total", "The number of retrieval deals initiated with storage providers", stats.UnitDimensionless)
-	RetrievalResponseCount                   = stats.Int64("retrieval_response_total", "The number of retrieval responses", stats.UnitDimensionless)
 	RetrievalErrorPaychCount                 = stats.Int64("retrieval_error_paych_total", "The number of retrieval errors for 'failed to get payment channel'", stats.UnitDimensionless)
 	RetrievalErrorRejectedCount              = stats.Int64("retrieval_error_rejected_total", "The number of retrieval errors for 'response rejected'", stats.UnitDimensionless)
 	RetrievalErrorTooManyCount               = stats.Int64("retrieval_error_toomany_total", "The number of retrieval errors for 'Too many retrieval deals received'", stats.UnitDimensionless)
@@ -82,6 +81,22 @@ var (
 		Measure:     BytesTransferredTotal,
 		Aggregation: view.Sum(),
 	}
+	bitswapRequestWithIndexerCandidatesView = &view.View{
+		Measure:     BitswapRequestWithIndexerCandidatesCount,
+		Aggregation: view.Count(),
+	}
+	bitswapRequestWithSuccessfulQueryView = &view.View{
+		Measure:     BitswapRequestWithSuccessfulQueryCount,
+		Aggregation: view.Count(),
+	}
+	indexerCandidatesView = &view.View{
+		Measure:     IndexerCandidatesCount,
+		Aggregation: view.Count(),
+	}
+	retrievalQueryView = &view.View{
+		Measure:     RetrievalQueryCount,
+		Aggregation: view.Count(),
+	}
 	retrievalDealActiveView = &view.View{
 		Measure:     RetrievalDealActiveCount,
 		Aggregation: view.Count(),
@@ -110,6 +125,38 @@ var (
 		Measure:     RetrievalRequestCount,
 		Aggregation: view.Count(),
 	}
+	retrievalErrorPaychView = &view.View{
+		Measure:     RetrievalErrorPaychCount,
+		Aggregation: view.Count(),
+	}
+	retrievalErrorRejectedView = &view.View{
+		Measure:     RetrievalErrorRejectedCount,
+		Aggregation: view.Count(),
+	}
+	retrievalErrorTooManyView = &view.View{
+		Measure:     RetrievalErrorTooManyCount,
+		Aggregation: view.Count(),
+	}
+	retrievalErrorACLView = &view.View{
+		Measure:     RetrievalErrorACLCount,
+		Aggregation: view.Count(),
+	}
+	retrievalErrorMaintenanceView = &view.View{
+		Measure:     RetrievalErrorMaintenanceCount,
+		Aggregation: view.Count(),
+	}
+	retrievalErrorNoOnlineView = &view.View{
+		Measure:     RetrievalErrorNoOnlineCount,
+		Aggregation: view.Count(),
+	}
+	retrievalErrorUnconfirmedView = &view.View{
+		Measure:     RetrievalErrorUnconfirmedCount,
+		Aggregation: view.Count(),
+	}
+	retrievalErrorOtherView = &view.View{
+		Measure:     RetrievalErrorOtherCount,
+		Aggregation: view.Count(),
+	}
 )
 
 var DefaultViews = []*view.View{
@@ -118,6 +165,10 @@ var DefaultViews = []*view.View{
 	bitswapRetreiverRequestView,
 	blockstoreCacheHitView,
 	bytesTransferredView,
+	bitswapRequestWithIndexerCandidatesView,
+	bitswapRequestWithSuccessfulQueryView,
+	indexerCandidatesView,
+	retrievalQueryView,
 	retrievalDealActiveView,
 	retrievalDealCostView,
 	retrievalDealDurationView,
@@ -125,4 +176,12 @@ var DefaultViews = []*view.View{
 	retrievalDealSuccessView,
 	retrievalDealSizeView,
 	retrievalRequestCountView,
+	retrievalErrorPaychView,
+	retrievalErrorRejectedView,
+	retrievalErrorTooManyView,
+	retrievalErrorACLView,
+	retrievalErrorMaintenanceView,
+	retrievalErrorNoOnlineView,
+	retrievalErrorUnconfirmedView,
+	retrievalErrorOtherView,
 }
