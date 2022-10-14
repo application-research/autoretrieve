@@ -366,6 +366,9 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	if err != nil {
 		return fmt.Errorf("registration request failed: %v", err)
 	}
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("registration request failed: expected status code 200 but got %d", res.StatusCode)
+	}
 	defer res.Body.Close()
 
 	var output struct {

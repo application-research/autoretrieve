@@ -248,8 +248,10 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		}
 
 		go func() {
-			logger.Infof("Starting estuary heartbeat ticker with AdvertiseInterval=%s", cfg.AdvertiseInterval)
-			ticker := time.NewTicker(cfg.AdvertiseInterval / 2)
+			logger.Infof("Starting estuary heartbeat ticker with HeartbeatInterval=%s", cfg.HeartbeatInterval)
+
+			// default HeartbeatInterval is 5mins
+			ticker := time.NewTicker(cfg.HeartbeatInterval)
 			if ticker == nil {
 				logger.Infof("Error setting ticker")
 			}
@@ -318,10 +320,15 @@ func sendEstuaryHeartbeat(cfg *Config, ticker *time.Ticker) error {
 	if err != nil {
 		return fmt.Errorf("could not parse AdvertiseInterval: %s", err)
 	}
-	if advInterval != cfg.AdvertiseInterval { // update advertisement interval
-		ticker.Reset(advInterval)
+	if advInterval != cfg.AdvertiseInterval {
+		cfg.AdvertiseInterval = advInterval
+		// update heartbeat interval (it has to be lower than advInterval)
+		if advInterval < cfg.HeartbeatInterval {
+			cfg.HeartbeatInterval = advInterval / 2
+			ticker.Reset(advInterval) // update ticker with new heartbeat interval
+		}
 	}
-	logger.Infof("Next Estuary heartbeat in %s", advInterval/2)
+	logger.Infof("Next Estuary heartbeat in %s", cfg.HeartbeatInterval)
 	return nil
 }
 
