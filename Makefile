@@ -43,6 +43,10 @@ ifeq ($(os_uname),Linux)
 	sudo apt-get install ocl-icd-opencl-dev libhwloc-dev -y
 endif
 
+.PHONY: install
+install: autoretrieve
+	install -C autoretrieve /usr/local/bin/autoretrieve
+
 .PHONY: install-autoretrieve-service
 install-autoretrieve-service:
 	cp scripts/autoretrieve-service/autoretrieve-register.service /etc/systemd/system/autoretrieve-register.service
