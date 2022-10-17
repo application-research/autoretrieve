@@ -1,0 +1,10 @@
+[Unit]
+Description=Register Autoretrieve on Estuary
+
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/estuary/config.env
+ExecStart=/usr/local/bin/autoretrieve register-estuary ${ESTUARY_API} ${ESTUARY_ADMIN_TOKEN}
+
+[Install]
+WantedBy=multi-user.target

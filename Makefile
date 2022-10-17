@@ -43,6 +43,25 @@ ifeq ($(os_uname),Linux)
 	sudo apt-get install ocl-icd-opencl-dev libhwloc-dev -y
 endif
 
+.PHONY: install
+install: autoretrieve
+	install -C autoretrieve /usr/local/bin/autoretrieve
+
+.PHONY: install-autoretrieve-service
+install-autoretrieve-service:
+	cp scripts/autoretrieve-service/autoretrieve-register.service /etc/systemd/system/autoretrieve-register.service
+	cp scripts/autoretrieve-service/autoretrieve.service /etc/systemd/system/autoretrieve.service
+	mkdir -p /etc/autoretrieve
+	cp scripts/autoretrieve-service/config.env /etc/autoretrieve/config.env
+
+	#TODO: if service changes to autoretrieve user/group, need to chown the /etc/autoretrieve dir and contents
+
+	systemctl daemon-reload
+
+	#Edit config values in /etc/autoretrieve/config.env before running any autoretrieve service files
+	#Run 'sudo systemctl start autoretrieve-setup.service' to complete setup
+	#Run 'sudo systemctl enable --now autoretrieve.service' once ready to enable and start autoretrieve service
+
 clean:
 	rm -rf extern autoretrieve
 .PHONY: clean
