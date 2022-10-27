@@ -33,7 +33,32 @@ var (
 	RetrievalErrorUnconfirmedCount           = stats.Int64("retrieval_error_unconfirmed_total", "The number of retrieval errors for 'unconfirmed block transfer'", stats.UnitDimensionless)
 	RetrievalErrorTimeoutCount               = stats.Int64("retrieval_error_timeout_total", "The number of retrieval errors for 'timeout after X'", stats.UnitDimensionless)
 	RetrievalErrorOtherCount                 = stats.Int64("retrieval_error_other_total", "The number of retrieval errors with uncategorized causes", stats.UnitDimensionless)
+	QueryErrorFailedToDialCount              = stats.Int64("query_error_failed_to_dial", "The number of query errors because we coult not connect to the provider", stats.UnitDimensionless)
+	QueryErrorFailedToOpenStreamCount        = stats.Int64("query_error_failed_to_open_stream", "The number of query errors where the miner did not respond on the retrieval protocol", stats.UnitDimensionless)
+	QueryErrorResponseEOFCount               = stats.Int64("query_error_response_eof", "The number of query errors because where the response terminated early", stats.UnitDimensionless)
+	QueryErrorResponseStreamResetCount       = stats.Int64("query_error_response_stream_reset", "The number of query errors because where the response stream was reset", stats.UnitDimensionless)
+	QueryErrorDAGStoreCount                  = stats.Int64("query_error_dagstore", "The number of query failures cause the provider experienced a DAG Store error", stats.UnitDimensionless)
+	QueryErrorDealNotFoundCount              = stats.Int64("query_error_dealstate", "The number of query failures cause the provider couldn't find the relevant deal", stats.UnitDimensionless)
+	QueryErrorOtherCount                     = stats.Int64("query_error_error_other_total", "The number of retrieval errors with uncategorized causes", stats.UnitDimensionless)
 )
+
+// QueryErrorMetricMatches is a mapping of retrieval error message substrings
+// during the query phase (i.e. that can be matched against error messages)
+// and metrics to report for that error.
+var QueryErrorMetricMatches = map[string]*stats.Int64Measure{
+	"failed to dial":                        QueryErrorFailedToDialCount,
+	"failed to open stream to peer":         QueryErrorFailedToOpenStreamCount,
+	"failed to read response: EOF":          QueryErrorResponseEOFCount,
+	"failed to read response: stream reset": QueryErrorResponseStreamResetCount,
+}
+
+// QueryResponseMetricMatches is a mapping of retrieval error message substrings
+// during the query phase when a response is sent but it is a failure
+// and metrics to report for that failure.
+var QueryResponseMetricMatches = map[string]*stats.Int64Measure{
+	"getting pieces for cid":             QueryErrorDAGStoreCount,
+	"failed to fetch storage deal state": QueryErrorDealNotFoundCount,
+}
 
 // ErrorMetricMatches is a mapping of retrieval error message substrings (i.e.
 // that can be matched against error messages) and metrics to report for that
@@ -163,6 +188,34 @@ var (
 		Measure:     RetrievalErrorOtherCount,
 		Aggregation: view.Count(),
 	}
+	queryErrorFailedToDialView = &view.View{
+		Measure:     QueryErrorFailedToDialCount,
+		Aggregation: view.Count(),
+	}
+	queryErrorFailedToOpenStreamView = &view.View{
+		Measure:     QueryErrorFailedToOpenStreamCount,
+		Aggregation: view.Count(),
+	}
+	queryErrorResponseEOFView = &view.View{
+		Measure:     QueryErrorResponseEOFCount,
+		Aggregation: view.Count(),
+	}
+	queryErrorResponseStreamResetView = &view.View{
+		Measure:     QueryErrorResponseStreamResetCount,
+		Aggregation: view.Count(),
+	}
+	queryErrorDAGStoreView = &view.View{
+		Measure:     QueryErrorDAGStoreCount,
+		Aggregation: view.Count(),
+	}
+	queryErrorDealNotFoundView = &view.View{
+		Measure:     QueryErrorDealNotFoundCount,
+		Aggregation: view.Count(),
+	}
+	queryErrorOtherView = &view.View{
+		Measure:     QueryErrorOtherCount,
+		Aggregation: view.Count(),
+	}
 )
 
 var DefaultViews = []*view.View{
@@ -191,4 +244,11 @@ var DefaultViews = []*view.View{
 	retrievalErrorUnconfirmedView,
 	retrievalErrorTimeoutView,
 	retrievalErrorOtherView,
+	queryErrorFailedToDialView,
+	queryErrorFailedToOpenStreamView,
+	queryErrorResponseEOFView,
+	queryErrorResponseStreamResetView,
+	queryErrorDAGStoreView,
+	queryErrorDealNotFoundView,
+	queryErrorOtherView,
 }
