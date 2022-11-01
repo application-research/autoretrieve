@@ -31,6 +31,7 @@ var (
 	RetrievalErrorMaintenanceCount           = stats.Int64("retrieval_error_maintenance_total", "The number of retrieval errors for 'Under maintenance, retry later'", stats.UnitDimensionless)
 	RetrievalErrorNoOnlineCount              = stats.Int64("retrieval_error_noonline_total", "The number of retrieval errors for 'miner is not accepting online retrieval deals'", stats.UnitDimensionless)
 	RetrievalErrorUnconfirmedCount           = stats.Int64("retrieval_error_unconfirmed_total", "The number of retrieval errors for 'unconfirmed block transfer'", stats.UnitDimensionless)
+	RetrievalErrorTimeoutCount               = stats.Int64("retrieval_error_timeout_total", "The number of retrieval errors for 'timeout after X'", stats.UnitDimensionless)
 	RetrievalErrorOtherCount                 = stats.Int64("retrieval_error_other_total", "The number of retrieval errors with uncategorized causes", stats.UnitDimensionless)
 )
 
@@ -45,6 +46,7 @@ var ErrorMetricMatches = map[string]*stats.Int64Measure{
 	"Under maintenance, retry later":                RetrievalErrorMaintenanceCount,
 	"miner is not accepting online retrieval deals": RetrievalErrorNoOnlineCount,
 	"unconfirmed block transfer":                    RetrievalErrorUnconfirmedCount,
+	"timeout after ":                                RetrievalErrorTimeoutCount,
 }
 
 // Tags
@@ -153,6 +155,10 @@ var (
 		Measure:     RetrievalErrorUnconfirmedCount,
 		Aggregation: view.Count(),
 	}
+	retrievalErrorTimeoutView = &view.View{
+		Measure:     RetrievalErrorTimeoutCount,
+		Aggregation: view.Count(),
+	}
 	retrievalErrorOtherView = &view.View{
 		Measure:     RetrievalErrorOtherCount,
 		Aggregation: view.Count(),
@@ -183,5 +189,6 @@ var DefaultViews = []*view.View{
 	retrievalErrorMaintenanceView,
 	retrievalErrorNoOnlineView,
 	retrievalErrorUnconfirmedView,
+	retrievalErrorTimeoutView,
 	retrievalErrorOtherView,
 }
