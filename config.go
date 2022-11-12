@@ -161,7 +161,6 @@ type MinerConfig struct {
 // All config values should be safe to leave uninitialized
 type Config struct {
 	EstuaryURL               string                   `yaml:"estuary-url"`
-	AdvertiseInterval        time.Duration            `yaml:"advertise-interval"`
 	HeartbeatInterval        time.Duration            `yaml:"heartbeat-interval"`
 	AdvertiseToken           string                   `yaml:"advertise-token"`
 	LookupEndpointType       EndpointType             `yaml:"lookup-endpoint-type"`
@@ -261,16 +260,6 @@ func DefaultConfig() Config {
 			MaxConcurrentRetrievals: 1,
 		},
 		MinerConfigs: make(map[ConfigStorageProvider]MinerConfig),
-
-		// AdvertiseInterval is the interval in which Estuary advertises to indexers
-		// on behalf of Autoretrieve servers. Autoretrieve servers have to heartbeat
-		// before that otherwise the server will think they're offline and will not
-		// advertise on their behalf
-		AdvertiseInterval: 6 * time.Hour,
-
-		// HeartbeatInterval is the interval in which Autoretrieve pings Estuary
-		// so it knows we're online (this has to be lower than AdvertiseInterval
-		HeartbeatInterval: 5 * time.Minute,
 	}
 }
 

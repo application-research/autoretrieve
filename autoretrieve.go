@@ -320,14 +320,7 @@ func sendEstuaryHeartbeat(cfg *Config, ticker *time.Ticker) error {
 	if err != nil {
 		return fmt.Errorf("could not parse AdvertiseInterval: %s", err)
 	}
-	if advInterval != cfg.AdvertiseInterval {
-		cfg.AdvertiseInterval = advInterval
-		// update heartbeat interval (it has to be lower than advInterval)
-		if advInterval < cfg.HeartbeatInterval {
-			cfg.HeartbeatInterval = advInterval / 2
-			ticker.Reset(advInterval) // update ticker with new heartbeat interval
-		}
-	}
+	cfg.HeartbeatInterval = advInterval / 2
 	logger.Infof("Next Estuary heartbeat in %s", cfg.HeartbeatInterval)
 	return nil
 }
