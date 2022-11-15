@@ -260,6 +260,8 @@ func DefaultConfig() Config {
 			MaxConcurrentRetrievals: 1,
 		},
 		MinerConfigs: make(map[ConfigStorageProvider]MinerConfig),
+
+		HeartbeatInterval: time.Second * 15,
 	}
 }
 
