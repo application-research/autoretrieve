@@ -4,7 +4,7 @@ go 1.18
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.0
-	github.com/application-research/filclient v0.2.1-0.20221015041616-ef7b47a4fe80
+	github.com/application-research/filclient v0.3.1-0.20221116020041-6717b9e6b45f
 	github.com/dustin/go-humanize v1.0.0
 	github.com/filecoin-project/go-address v1.0.0
 	github.com/filecoin-project/go-data-transfer v1.15.2
