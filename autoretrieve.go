@@ -248,18 +248,21 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		}
 
 		go func() {
-			logger.Infof("Starting estuary heartbeat ticker with HeartbeatInterval=%s", cfg.HeartbeatInterval)
+			logger.Infof("Starting estuary heartbeat ticker with heartbeat interval %s", cfg.HeartbeatInterval)
 
-			// default HeartbeatInterval is 5mins
 			ticker := time.NewTicker(cfg.HeartbeatInterval)
 			if ticker == nil {
 				logger.Infof("Error setting ticker")
 			}
 			for ; true; <-ticker.C {
 				logger.Infof("Sending Estuary heartbeat message")
-				err = sendEstuaryHeartbeat(&cfg, ticker)
+				interval, err := sendEstuaryHeartbeat(&cfg)
 				if err != nil {
-					logger.Errorf("Failed to send Estuary heartbeat message: %s", err)
+					logger.Errorf("Failed to send Estuary heartbeat message - resetting to default heartbeat interval of %s: %v", cfg.HeartbeatInterval, err)
+					ticker.Reset(cfg.HeartbeatInterval)
+				} else {
+					logger.Infof("Next Estuary heartbeat in %s", interval)
+					ticker.Reset(interval)
 				}
 			}
 		}()
@@ -275,16 +278,19 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 	}, nil
 }
 
-func sendEstuaryHeartbeat(cfg *Config, ticker *time.Ticker) error {
+func sendEstuaryHeartbeat(cfg *Config) (time.Duration, error) {
+
+	// Set ticker
+
 	req, err := http.NewRequest("POST", cfg.EstuaryURL+"/autoretrieve/heartbeat", bytes.NewBuffer(nil))
 	if err != nil {
-		return err
+		return 0, err
 	}
 
 	req.Header.Set("Authorization", fmt.Sprintf("Bearer %s", cfg.AdvertiseToken))
 	res, err := http.DefaultClient.Do(req)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	defer res.Body.Close()
 
@@ -296,7 +302,7 @@ func sendEstuaryHeartbeat(cfg *Config, ticker *time.Ticker) error {
 		if err != nil {
 			resString = "could not read response"
 		}
-		return fmt.Errorf("%s", resString)
+		return 0, fmt.Errorf("%s", resString)
 	}
 
 	var output struct {
@@ -308,28 +314,19 @@ func sendEstuaryHeartbeat(cfg *Config, ticker *time.Ticker) error {
 		Error             interface{}
 	}
 	if err := json.NewDecoder(res.Body).Decode(&output); err != nil {
-
-		return fmt.Errorf("could not decode response: %v", err)
+		return 0, fmt.Errorf("could not decode response: %v", err)
 	}
 
 	if output.Error != nil && output.Error != "" {
-		return fmt.Errorf("%v", output.Error)
+		return 0, fmt.Errorf("%v", output.Error)
 	}
 
 	advInterval, err := time.ParseDuration(output.AdvertiseInterval)
 	if err != nil {
-		return fmt.Errorf("could not parse AdvertiseInterval: %s", err)
+		return 0, fmt.Errorf("could not parse advertise interval: %s", err)
 	}
-	if advInterval != cfg.AdvertiseInterval {
-		cfg.AdvertiseInterval = advInterval
-		// update heartbeat interval (it has to be lower than advInterval)
-		if advInterval < cfg.HeartbeatInterval {
-			cfg.HeartbeatInterval = advInterval / 2
-			ticker.Reset(advInterval) // update ticker with new heartbeat interval
-		}
-	}
-	logger.Infof("Next Estuary heartbeat in %s", cfg.HeartbeatInterval)
-	return nil
+
+	return advInterval / 2, nil
 }
 
 // TODO: this function should do a lot more to clean up resources and come to

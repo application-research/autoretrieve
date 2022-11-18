@@ -334,18 +334,13 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	}
 	peerkeyPub := crypto.ConfigEncodeKey(peerkeyPubBytes)
 
-	peerID, err := peer.IDFromPrivateKey(peerkey)
-	if err != nil {
-		return fmt.Errorf("couldn't get peer ID from key: %v", err)
-	}
-
 	// fmt.Printf("Using peer ID: %s\n", peer)
 	fmt.Printf("Using public key: %s\n", peerkeyPub)
 
 	// Do registration
 	body := &bytes.Buffer{}
 	writer := multipart.NewWriter(body)
-	writer.WriteField("addresses", fmt.Sprintf("/ip4/%s/tcp/6746/p2p/%s", ipInfo.Query, peerID))
+	writer.WriteField("addresses", fmt.Sprintf("/ip4/%s/tcp/6746", ipInfo.Query))
 	writer.WriteField("pubKey", peerkeyPub)
 	writer.Close()
 
@@ -395,11 +390,11 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	cfg.EstuaryURL = endpointURL
 	cfg.AdvertiseToken = output.Token
 
-	advInterval, err := time.ParseDuration(output.AdvertiseInterval)
+	advertiseInterval, err := time.ParseDuration(output.AdvertiseInterval)
 	if err != nil {
-		return fmt.Errorf("could not parse AdvertiseInterval: %s", err)
+		return fmt.Errorf("could not parse advertisement interval: %s", err)
 	}
-	cfg.AdvertiseInterval = advInterval
+	cfg.HeartbeatInterval = advertiseInterval
 
 	if err := WriteConfig(cfg, fullConfigPath(ctx)); err != nil {
 		return fmt.Errorf("failed to write config: %v", err)
