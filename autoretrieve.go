@@ -428,36 +428,32 @@ func initHost(ctx context.Context, dataDir string, resourceManagerStats bool, li
 
 // ---- transitional wrappers to bridge filclient into something usable by lassie in its current state ----- //
 
-var _ lassieretriever.RetrievalEvent = filclientLassieRetrievalEventWrapper{}
 var _ rep.RetrievalSubscriber = &filclientLassieSubscriberWrapper{}
 var _ lassieretriever.FilClient = &filclientLassieWrapper{}
-
-type filclientLassieRetrievalEventWrapper struct {
-	evt rep.RetrievalEvent
-}
-
-func (flrew filclientLassieRetrievalEventWrapper) Code() lassieretriever.Code {
-	return lassieretriever.Code(flrew.evt.Code())
-}
-func (flrew filclientLassieRetrievalEventWrapper) Phase() lassieretriever.Phase {
-	return lassieretriever.Phase(flrew.evt.Phase())
-}
-func (flrew filclientLassieRetrievalEventWrapper) PayloadCid() cid.Cid {
-	return flrew.evt.PayloadCid()
-}
-func (flrew filclientLassieRetrievalEventWrapper) StorageProviderId() peer.ID {
-	return flrew.evt.StorageProviderId()
-}
-func (flrew filclientLassieRetrievalEventWrapper) StorageProviderAddr() address.Address {
-	return flrew.evt.StorageProviderAddr()
-}
 
 type filclientLassieSubscriberWrapper struct {
 	sub lassieretriever.RetrievalSubscriber
 }
 
 func (flsw *filclientLassieSubscriberWrapper) OnRetrievalEvent(event rep.RetrievalEvent) {
-	flsw.sub.OnRetrievalEvent(filclientLassieRetrievalEventWrapper{event})
+	switch ret := event.(type) {
+	case rep.RetrievalEventConnect:
+		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventConnect(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr()))
+	case rep.RetrievalEventQueryAsk:
+		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventQueryAsk(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr(), ret.QueryResponse()))
+	case rep.RetrievalEventProposed:
+		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventProposed(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr()))
+	case rep.RetrievalEventAccepted:
+		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventAccepted(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr()))
+	case rep.RetrievalEventFirstByte:
+		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventFirstByte(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr()))
+	case rep.RetrievalEventFailure:
+		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventFailure(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr(), ret.ErrorMessage()))
+	case rep.RetrievalEventSuccess:
+		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventSuccess(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr(), ret.ReceivedSize(), ret.ReceivedCids(), ret.Duration(), ret.TotalPayment()))
+	default:
+		logger.Errorf("unexpected retrieval event type %T: %v", ret, ret)
+	}
 }
 
 type filclientLassieWrapper struct {
