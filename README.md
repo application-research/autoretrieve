@@ -8,6 +8,22 @@ Protocol Labs develops two related but incompatible decentralized data transfer 
 
 Autoretrieve is a "translational proxy" that allows data to be transferred from Filecoin to IPFS in an automated fashion. The existing alternatives for Autoretrieve's Filecoin-to-IPFS flow are the Boost IPFS node that providers may optionally enable, and manual transfer.
 
+Boost IPFS node is not always a feasible option for several reasons:
+- Providers are not incentivized to enable this feature
+- Only free retrievals are supported
+
+In comparison, Autoretrieve:
+- Is a dedicated node, and operational burden/cost does not fall on storage provider operators
+- Supports paid retrievals (the Autoretrieve node operators covers the payment)
+
+## How does Autoretrieve work?
+
+Autoretrieve is at its core a Bitswap server. When a Bitswap request comes in, Autoretrieve queries an indexer for Filecoin storage providers that have the requested CID. The providers are sorted and retrieval is attempted sequentially until a successful retrieval is opened. As the GraphSync data lands into Autoretrieve from the storage provider, the data is streamed live back to the IPFS client.
+
+In order for IPFS clients to be able to retrieve Filecoin data using Autoretrieve, they must be connected to Autoretrieve. Currently, Autoretrieve can be advertised to the indexer (and by extension the DHT) by Estuary. Autoretrieve does not currently have an independent way to advertise its own data.
+
+If an Autoretrieve node is not advertised, clients may still download data from it by accidentally connecting.
+
 ## Usage
 
 Autoretrieve uses Docker with Buildkit for build caching. Docker rebuilds are
