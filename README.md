@@ -1,20 +1,20 @@
 # Autoretrieve
 
-Autoretrieve is a standalone Graphsync-to-Bitswap proxy server that allows IPFS clients to retrieve data which may be available on the Filecoin network but not on IPFS. 
+Autoretrieve is a standalone Graphsync-to-Bitswap proxy server, which allows IPFS clients to retrieve data which may be available on the Filecoin network but not on IPFS (such as data that has become unpinned, or data that was uploaded to a Filecoin storage provider but was never sent to an IPFS provider).
 
 ## What problem does Autoretrieve solve?
 
-Protocol Labs develops two related but incompatible decentralized data transfer protocols - Bitswap and GraphSync, which back the IPFS and Filecoin networks, respectively. These networks are fundamentally incompatible - a client of one network cannot retrieve data from a provider of the other. [TODO: link more info about differences.] This raises the following issue: what if there is data that exists on Filecoin, but not on IPFS?
+Protocol Labs develops two decentralized data transfer protocols - Bitswap and GraphSync, which back the IPFS and Filecoin networks, respectively. Although built on similar principles, these networks are fundamentally incompatible and separate - a client of one network cannot retrieve data from a provider of the other. [TODO: link more info about differences.] This raises the following issue: what if there is data that exists on Filecoin, but not on IPFS?
 
 Autoretrieve is a "translational proxy" that allows data to be transferred from Filecoin to IPFS in an automated fashion. The existing alternatives for Autoretrieve's Filecoin-to-IPFS flow are the Boost IPFS node that providers may optionally enable, and manual transfer.
 
-Boost IPFS node is not always a feasible option for several reasons:
+[Boost IPFS node](https://github.com/filecoin-project/boost/issues/709) is not always a feasible option for several reasons:
 - Providers are not incentivized to enable this feature
 - Only free retrievals are supported
 
 In comparison, Autoretrieve:
 - Is a dedicated node, and operational burden/cost does not fall on storage provider operators
-- Supports paid retrievals (the Autoretrieve node operators covers the payment)
+- Supports paid retrievals (the Autoretrieve node operator covers the payment)
 
 ## How does Autoretrieve work?
 
