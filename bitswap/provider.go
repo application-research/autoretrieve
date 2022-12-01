@@ -280,9 +280,9 @@ func (provider *Provider) runWorker() {
 			case topicBlock:
 				blk, err := provider.blockManager.Get(context.Background(), cid.Cid(topic))
 				if err != nil {
-					msg.AddBlock(blk)
-				} else {
 					msg.AddDontHave(cid.Cid(topic))
+				} else {
+					msg.AddBlock(blk)
 				}
 			}
 		}
