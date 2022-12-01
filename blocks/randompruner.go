@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	flatfs "github.com/ipfs/go-ds-flatfs"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
@@ -118,7 +119,7 @@ func (pruner *RandomPruner) DeleteBlock(ctx context.Context, cid cid.Cid) error 
 	return nil
 }
 
-func (pruner *RandomPruner) Put(ctx context.Context, block Block) error {
+func (pruner *RandomPruner) Put(ctx context.Context, block blocks.Block) error {
 	pruner.updatePin(block.Cid())
 	pruner.Poll(ctx)
 	if err := pruner.Blockstore.Put(ctx, block); err != nil {
@@ -130,7 +131,7 @@ func (pruner *RandomPruner) Put(ctx context.Context, block Block) error {
 	return nil
 }
 
-func (pruner *RandomPruner) PutMany(ctx context.Context, blocks []Block) error {
+func (pruner *RandomPruner) PutMany(ctx context.Context, blocks []blocks.Block) error {
 	blocksSize := 0
 	for _, block := range blocks {
 		pruner.updatePin(block.Cid())

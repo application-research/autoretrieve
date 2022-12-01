@@ -14,7 +14,10 @@ import (
 
 var log = logging.Logger("blockstore")
 
-type Block = blocks.Block
+type Block struct {
+	Cid  cid.Cid
+	Size int
+}
 
 // Manager is a blockstore with thread safe notification hooking for put
 // events.
@@ -48,12 +51,12 @@ func NewManager(inner blockstore.Blockstore, getAwaitTimeout time.Duration) *Man
 	return mgr
 }
 
-func (mgr *Manager) GetAwait(ctx context.Context, cid cid.Cid, callback func(Block)) error {
+func (mgr *Manager) AwaitBlock(ctx context.Context, cid cid.Cid, callback func(Block)) error {
 	// We need to lock the blockstore here to make sure the requested block
 	// doesn't get added while being added to the waitlist
 	mgr.waitListLk.Lock()
 
-	block, err := mgr.Get(ctx, cid)
+	size, err := mgr.GetSize(ctx, cid)
 
 	// If we couldn't get the block, we add it to the waitlist - the block will
 	// be populated later during a Put or PutMany event
@@ -76,7 +79,7 @@ func (mgr *Manager) GetAwait(ctx context.Context, cid cid.Cid, callback func(Blo
 	mgr.waitListLk.Unlock()
 
 	// Otherwise, we can immediately run the callback
-	callback(block)
+	callback(Block{cid, size})
 
 	return nil
 }
@@ -90,7 +93,7 @@ func (mgr *Manager) Put(ctx context.Context, block blocks.Block) error {
 	}
 
 	select {
-	case mgr.readyBlocks <- block:
+	case mgr.readyBlocks <- Block{block.Cid(), len(block.RawData())}:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -108,7 +111,7 @@ func (mgr *Manager) PutMany(ctx context.Context, blocks []blocks.Block) error {
 
 	for _, block := range blocks {
 		select {
-		case mgr.readyBlocks <- block:
+		case mgr.readyBlocks <- Block{block.Cid(), len(block.RawData())}:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -124,7 +127,7 @@ func (mgr *Manager) startPollReadyBlocks() {
 }
 
 func (mgr *Manager) notifyWaitCallbacks(block Block) {
-	cid := block.Cid()
+	cid := block.Cid
 
 	mgr.waitListLk.Lock()
 	if entries, ok := mgr.waitList[cid]; ok {

@@ -38,7 +38,7 @@ const (
 type (
 	topicHave     cid.Cid
 	topicDontHave cid.Cid
-	topicBlock    blocks.Block
+	topicBlock    cid.Cid
 )
 
 const targetMessageSize = 1 << 10
@@ -146,14 +146,14 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 			// If the block was found, queue HAVE and move on...
 			if has {
 				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
-				provider.queueHave(ctx, sender, entry, entry.Cid)
+				provider.queueHave(ctx, sender, entry)
 				continue
 			}
 
 			// ...otherwise, check retrieval candidates for it
 		case wantTypeBlock:
 			// For WANT_BLOCK, try to get the block
-			block, err := provider.blockManager.Get(ctx, entry.Cid)
+			size, err := provider.blockManager.GetSize(ctx, entry.Cid)
 
 			// If there was a problem (aside from block not found), log and move
 			// on
@@ -166,7 +166,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 			// on...
 			if !ipld.IsNotFound(err) {
 				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
-				provider.queueBlock(ctx, sender, entry, block)
+				provider.queueBlock(ctx, sender, entry, size)
 				continue
 			}
 
@@ -202,8 +202,8 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				continue
 			}
 
-			if err := provider.blockManager.GetAwait(ctx, entry.Cid, func(block blocks.Block) {
-				provider.queueHave(context.Background(), sender, entry, block.Cid())
+			if err := provider.blockManager.AwaitBlock(ctx, entry.Cid, func(_ blocks.Block) {
+				provider.queueHave(context.Background(), sender, entry)
 				provider.signalWork()
 			}); err != nil {
 				logger.Errorf("Failed to load block: %s", err.Error())
@@ -222,8 +222,8 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				continue
 			}
 
-			if err := provider.blockManager.GetAwait(ctx, entry.Cid, func(block blocks.Block) {
-				provider.queueBlock(context.Background(), sender, entry, block)
+			if err := provider.blockManager.AwaitBlock(ctx, entry.Cid, func(block blocks.Block) {
+				provider.queueBlock(context.Background(), sender, entry, block.Size)
 				provider.signalWork()
 			}); err != nil {
 				logger.Errorf("Failed to load block: %s", err.Error())
@@ -270,6 +270,7 @@ func (provider *Provider) runWorker() {
 		}
 
 		msg := message.New(false)
+
 		for _, task := range tasks {
 			switch topic := task.Topic.(type) {
 			case topicHave:
@@ -277,7 +278,12 @@ func (provider *Provider) runWorker() {
 			case topicDontHave:
 				msg.AddDontHave(cid.Cid(topic))
 			case topicBlock:
-				msg.AddBlock(blocks.Block(topic))
+				blk, err := provider.blockManager.Get(context.Background(), cid.Cid(topic))
+				if err != nil {
+					msg.AddBlock(blk)
+				} else {
+					msg.AddDontHave(cid.Cid(topic))
+				}
 			}
 		}
 		msg.SetPendingBytes(int32(pending))
@@ -291,13 +297,13 @@ func (provider *Provider) runWorker() {
 }
 
 // Adds a BLOCK task to the task queue
-func (provider *Provider) queueBlock(ctx context.Context, sender peer.ID, entry message.Entry, block blocks.Block) {
+func (provider *Provider) queueBlock(ctx context.Context, sender peer.ID, entry message.Entry, size int) {
 	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "BLOCK"))
 
 	provider.taskQueue.PushTasks(sender, peertask.Task{
-		Topic:    topicBlock(block),
+		Topic:    topicBlock(entry.Cid),
 		Priority: int(entry.Priority),
-		Work:     len(block.RawData()),
+		Work:     size,
 	})
 
 	// Record response metric
@@ -319,11 +325,11 @@ func (provider *Provider) queueDontHave(ctx context.Context, sender peer.ID, ent
 }
 
 // Adds a HAVE task to the task queue
-func (provider *Provider) queueHave(ctx context.Context, sender peer.ID, entry message.Entry, haveCid cid.Cid) {
+func (provider *Provider) queueHave(ctx context.Context, sender peer.ID, entry message.Entry) {
 	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "HAVE"))
 
 	provider.taskQueue.PushTasks(sender, peertask.Task{
-		Topic:    topicHave(haveCid),
+		Topic:    topicHave(entry.Cid),
 		Priority: int(entry.Priority),
 		Work:     message.BlockPresenceSize(entry.Cid),
 	})
