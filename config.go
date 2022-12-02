@@ -13,7 +13,7 @@ import (
 	"github.com/filecoin-project/go-address"
 	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
 	"github.com/ipfs/go-cid"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	peer "github.com/libp2p/go-libp2p/core/peer"
 	"gopkg.in/yaml.v3"
 )
 
