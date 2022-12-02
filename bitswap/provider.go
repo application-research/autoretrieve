@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/application-research/autoretrieve/blocks"
-	"github.com/application-research/autoretrieve/filecoin"
 	"github.com/application-research/autoretrieve/metrics"
+	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
 	"github.com/ipfs/go-bitswap/message"
 	bitswap_message_pb "github.com/ipfs/go-bitswap/message/pb"
 	"github.com/ipfs/go-bitswap/network"
@@ -17,11 +17,11 @@ import (
 	"github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-peertaskqueue"
 	"github.com/ipfs/go-peertaskqueue/peertask"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/routing"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/fullrt"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/routing"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 )
@@ -53,7 +53,7 @@ type Provider struct {
 	config       ProviderConfig
 	network      network.BitSwapNetwork
 	blockManager *blocks.Manager
-	retriever    *filecoin.Retriever
+	retriever    *lassieretriever.Retriever
 	taskQueue    *peertaskqueue.PeerTaskQueue
 	workReady    chan struct{}
 }
@@ -64,7 +64,7 @@ func NewProvider(
 	host host.Host,
 	datastore datastore.Batching,
 	blockManager *blocks.Manager,
-	retriever *filecoin.Retriever,
+	retriever *lassieretriever.Retriever,
 ) (*Provider, error) {
 
 	var routing routing.ContentRouting
@@ -102,7 +102,7 @@ func NewProvider(
 		workReady:    make(chan struct{}, config.MaxBitswapWorkers),
 	}
 
-	provider.network.SetDelegate(provider)
+	provider.network.Start(provider)
 
 	for i := uint(0); i < config.MaxBitswapWorkers; i++ {
 		go provider.runWorker()
@@ -195,7 +195,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				// queue DONT_HAVE and move on
 				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
 
-				if !errors.Is(err, filecoin.ErrNoCandidates) {
+				if !errors.Is(err, lassieretriever.ErrNoCandidates) {
 					logger.Warnf("Could not get candidates: %s", err.Error())
 				}
 
@@ -215,7 +215,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				// queue DONT_HAVE and move on
 				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
 
-				if !errors.Is(err, filecoin.ErrNoCandidates) {
+				if !errors.Is(err, lassieretriever.ErrNoCandidates) {
 					logger.Warnf("Could not get candidates: %s", err.Error())
 				}
 

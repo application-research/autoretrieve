@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/application-research/autoretrieve/bitswap"
-	"github.com/application-research/autoretrieve/filecoin"
 	"github.com/application-research/filclient"
 	"github.com/dustin/go-humanize"
 	"github.com/filecoin-project/go-address"
+	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
 	"github.com/ipfs/go-cid"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	peer "github.com/libp2p/go-libp2p/core/peer"
 	"gopkg.in/yaml.v3"
 )
 
@@ -184,31 +184,31 @@ type Config struct {
 }
 
 // Extract relevant config points into a filecoin retriever config
-func (cfg *Config) ExtractFilecoinRetrieverConfig(ctx context.Context, fc *filclient.FilClient) (filecoin.RetrieverConfig, error) {
-	convertedMinerCfgs := make(map[peer.ID]filecoin.MinerConfig)
+func (cfg *Config) ExtractFilecoinRetrieverConfig(ctx context.Context, fc *filclient.FilClient) (lassieretriever.RetrieverConfig, error) {
+	convertedMinerCfgs := make(map[peer.ID]lassieretriever.MinerConfig)
 	for provider, minerCfg := range cfg.MinerConfigs {
 		peer, err := provider.GetPeerID(ctx, fc)
 		if err != nil {
-			return filecoin.RetrieverConfig{}, err
+			return lassieretriever.RetrieverConfig{}, err
 		}
 
-		convertedMinerCfgs[peer] = filecoin.MinerConfig(minerCfg)
+		convertedMinerCfgs[peer] = lassieretriever.MinerConfig(minerCfg)
 	}
 
 	blacklist, err := configStorageProviderListToPeerMap(ctx, fc, cfg.MinerBlacklist)
 	if err != nil {
-		return filecoin.RetrieverConfig{}, err
+		return lassieretriever.RetrieverConfig{}, err
 	}
 
 	whitelist, err := configStorageProviderListToPeerMap(ctx, fc, cfg.MinerWhitelist)
 	if err != nil {
-		return filecoin.RetrieverConfig{}, err
+		return lassieretriever.RetrieverConfig{}, err
 	}
 
-	return filecoin.RetrieverConfig{
+	return lassieretriever.RetrieverConfig{
 		MinerBlacklist:     blacklist,
 		MinerWhitelist:     whitelist,
-		DefaultMinerConfig: filecoin.MinerConfig(cfg.DefaultMinerConfig),
+		DefaultMinerConfig: lassieretriever.MinerConfig(cfg.DefaultMinerConfig),
 		MinerConfigs:       convertedMinerCfgs,
 		PaidRetrievals:     cfg.PaidRetrievals,
 	}, nil
