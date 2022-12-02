@@ -4,13 +4,13 @@ go 1.18
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
-	github.com/application-research/filclient v0.4.1-0.20221125032245-59c5f195a7b4
+	github.com/application-research/filclient v0.4.1-0.20221202003322-ae0d8e5e4107
 	github.com/dustin/go-humanize v1.0.0
 	github.com/filecoin-project/go-address v1.1.0
 	github.com/filecoin-project/go-data-transfer v1.15.2
 	github.com/filecoin-project/go-fil-markets v1.25.2
 	github.com/filecoin-project/index-provider v0.9.1
-	github.com/filecoin-project/lassie v0.0.0-20221125012318-e405495b8b91
+	github.com/filecoin-project/lassie v0.0.0-20221201201117-ea9929030b13
 	github.com/filecoin-project/lotus v1.18.0
 	github.com/filecoin-project/storetheindex v0.4.30-0.20221114113647-683091f8e893
 	github.com/ipfs/go-bitswap v0.10.2
@@ -75,7 +75,7 @@ require (
 	github.com/elastic/go-windows v1.0.0 // indirect
 	github.com/elastic/gosigar v0.14.2 // indirect
 	github.com/fatih/color v1.13.0 // indirect
-	github.com/filecoin-project/boost v1.5.1-rc2.0.20221125025709-9c1f9b064ad7 // indirect
+	github.com/filecoin-project/boost v1.5.1-rc2.0.20221128124133-b5768c8a4220 // indirect
 	github.com/filecoin-project/dagstore v0.5.5 // indirect
 	github.com/filecoin-project/filecoin-ffi v0.30.4-0.20200910194244-f640612a1a1f // indirect
 	github.com/filecoin-project/go-amt-ipld/v2 v2.1.0 // indirect
