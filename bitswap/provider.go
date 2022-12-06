@@ -142,7 +142,7 @@ func (provider *Provider) handleRequests() {
 			continue
 		}
 
-		log.Infof("Processing %d requests for %s", len(tasks), peerID)
+		log.Debugf("Processing %d requests for %s", len(tasks), peerID)
 
 		for _, task := range tasks {
 			entry, ok := task.Data.(message.Entry)
@@ -168,7 +168,7 @@ func (provider *Provider) handleRequest(
 	// If it's a cancel, just remove from the queue and finish
 
 	if entry.Cancel {
-		log.Infof("Cancelling request for %s", entry.Cid)
+		log.Debugf("Cancelling request for %s", entry.Cid)
 		provider.responseQueue.Remove(entry.Cid, peerID)
 		return nil
 	}
@@ -180,7 +180,7 @@ func (provider *Provider) handleRequest(
 	if err == nil {
 		switch entry.WantType {
 		case wantTypeHave:
-			log.Infof("Want have for %s", entry.Cid)
+			log.Debugf("Want have for %s", entry.Cid)
 			provider.responseQueue.PushTasks(peerID, peertask.Task{
 				Topic:    entry.Cid,
 				Priority: int(entry.Priority),
@@ -189,7 +189,7 @@ func (provider *Provider) handleRequest(
 			})
 			return nil
 		case wantTypeBlock:
-			log.Infof("Want block for %s", entry.Cid)
+			log.Debugf("Want block for %s", entry.Cid)
 			provider.responseQueue.PushTasks(peerID, peertask.Task{
 				Topic:    entry.Cid,
 				Priority: int(entry.Priority),
@@ -222,7 +222,7 @@ func (provider *Provider) handleResponses() {
 			continue
 		}
 
-		log.Infof("Responding to %d requests for %s", len(tasks), peerID)
+		log.Debugf("Responding to %d requests for %s", len(tasks), peerID)
 
 		msg := message.New(false)
 
@@ -233,7 +233,7 @@ func (provider *Provider) handleResponses() {
 				continue
 			}
 
-			log.Infof("Sending response for %s", cid)
+			log.Debugf("Sending response for %s", cid)
 
 			action, ok := task.Data.(ResponseAction)
 			if !ok {
@@ -244,10 +244,10 @@ func (provider *Provider) handleResponses() {
 			switch action {
 			case sendHave:
 				msg.AddHave(cid)
-				log.Infof("Sending have for %s", cid)
+				log.Debugf("Sending have for %s", cid)
 			case sendDontHave:
 				msg.AddDontHave(cid)
-				log.Infof("Sending dont have for %s", cid)
+				log.Debugf("Sending dont have for %s", cid)
 			case sendBlock:
 				block, err := provider.blockManager.Get(ctx, cid)
 				if err != nil {
@@ -255,7 +255,7 @@ func (provider *Provider) handleResponses() {
 					continue
 				}
 				msg.AddBlock(block)
-				log.Infof("Sending block for %s", cid)
+				log.Debugf("Sending block for %s", cid)
 			}
 		}
 
@@ -265,7 +265,7 @@ func (provider *Provider) handleResponses() {
 		}
 
 		provider.responseQueue.TasksDone(peerID, tasks...)
-		log.Infof("Sent message to %s", peerID)
+		log.Debugf("Sent message to %s", peerID)
 	}
 }
 
@@ -279,7 +279,7 @@ func (provider *Provider) handleRetrievals() {
 			continue
 		}
 
-		log.Infof("Retrieval for %d CIDs queued for %s", len(tasks), peerID)
+		log.Debugf("Retrieval of %d CIDs queued for %s", len(tasks), peerID)
 
 		for _, task := range tasks {
 			cid, ok := task.Topic.(cid.Cid)
@@ -288,7 +288,7 @@ func (provider *Provider) handleRetrievals() {
 				continue
 			}
 
-			log.Infof("Starting retrieval for %s", cid)
+			log.Debugf("Starting retrieval for %s", cid)
 
 			// Try to start a new retrieval (if it's already running then no
 			// need to error, just continue on to await block)
