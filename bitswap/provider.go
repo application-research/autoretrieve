@@ -112,9 +112,17 @@ func NewProvider(
 
 	provider.network.Start(provider)
 
-	go provider.handleRequests()
-	go provider.handleResponses()
-	go provider.handleRetrievals()
+	for i := 0; i < 8; i++ {
+		go provider.handleRequests()
+	}
+
+	for i := 0; i < 8; i++ {
+		go provider.handleResponses()
+	}
+
+	for i := 0; i < 8; i++ {
+		go provider.handleRetrievals()
+	}
 
 	return provider, nil
 }
