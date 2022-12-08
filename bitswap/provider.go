@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/application-research/autoretrieve/blocks"
+	"github.com/application-research/autoretrieve/metrics"
 	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
 	"github.com/ipfs/go-bitswap/message"
 	bitswap_message_pb "github.com/ipfs/go-bitswap/message/pb"
@@ -20,6 +21,8 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
+	"go.opencensus.io/stats"
+	"go.opencensus.io/tag"
 )
 
 var log = logging.Logger("autoretrieve")
@@ -32,6 +35,11 @@ const (
 
 // Response queue actions
 type ResponseAction uint
+
+type ResponseData struct {
+	action ResponseAction
+	reason string
+}
 
 const (
 	sendHave ResponseAction = iota
@@ -173,6 +181,13 @@ func (provider *Provider) handleRequest(
 ) error {
 	log := log.With("peer_id", peerID)
 
+	// Skip blacklisted CIDs
+	if provider.config.CidBlacklist[entry.Cid] {
+		log.Debugf("Replying DONT_HAVE for blacklisted CID: %s", entry.Cid)
+		provider.queueSendDontHave(peerID, int(entry.Priority), entry.Cid, "blacklisted_cid")
+		return nil
+	}
+
 	// If it's a cancel, just remove from the queue and finish
 
 	if entry.Cancel {
@@ -181,35 +196,35 @@ func (provider *Provider) handleRequest(
 		return nil
 	}
 
+	stats.Record(ctx, metrics.BitswapRequestCount.M(1))
+
 	// First check blockstore, immediately write to response queue if it
 	// exists
 
 	size, err := provider.blockManager.GetSize(ctx, entry.Cid)
 	if err == nil {
+		stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
+
 		switch entry.WantType {
 		case wantTypeHave:
 			log.Debugf("Want have for %s", entry.Cid)
-			provider.responseQueue.PushTasks(peerID, peertask.Task{
-				Topic:    entry.Cid,
-				Priority: int(entry.Priority),
-				Work:     entry.Cid.ByteLen(),
-				Data:     sendHave,
-			})
+			provider.queueSendHave(peerID, int(entry.Priority), entry.Cid)
 			return nil
 		case wantTypeBlock:
 			log.Debugf("Want block for %s", entry.Cid)
-			provider.responseQueue.PushTasks(peerID, peertask.Task{
-				Topic:    entry.Cid,
-				Priority: int(entry.Priority),
-				Work:     size,
-				Data:     sendBlock,
-			})
+			provider.queueSendBlock(peerID, int(entry.Priority), entry.Cid, size)
 			return nil
 		}
 	}
 
-	// Otherwise, write to retrieve queue (regardless of whether this is a want
-	// have or want block)
+	// Otherwise, write to retrieve queue regardless of whether this is a want
+	// have or want block (unless retrieval is disabled)
+
+	if provider.retriever == nil {
+		provider.queueSendDontHave(peerID, int(entry.Priority), entry.Cid, "disabled_retriever")
+	}
+
+	stats.Record(ctx, metrics.BitswapRetrieverRequestCount.M(1))
 
 	provider.retrievalQueue.PushTasks(peerID, peertask.Task{
 		Topic:    entry.Cid,
@@ -243,19 +258,27 @@ func (provider *Provider) handleResponses() {
 
 			log.Debugf("Sending response for %s", cid)
 
-			action, ok := task.Data.(ResponseAction)
+			data, ok := task.Data.(ResponseData)
 			if !ok {
 				log.Warnf("Response task data was not a response action")
 				continue
 			}
 
-			switch action {
+			switch data.action {
 			case sendHave:
 				msg.AddHave(cid)
 				log.Debugf("Sending have for %s", cid)
+
+				// Response metric
+				ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "HAVE"))
+				stats.Record(ctx, metrics.BitswapResponseCount.M(1))
 			case sendDontHave:
 				msg.AddDontHave(cid)
 				log.Debugf("Sending dont have for %s", cid)
+
+				// Response metric
+				ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "DONT_HAVE"), tag.Insert(metrics.BitswapDontHaveReason, data.reason))
+				stats.Record(ctx, metrics.BitswapResponseCount.M(1))
 			case sendBlock:
 				block, err := provider.blockManager.Get(ctx, cid)
 				if err != nil {
@@ -264,6 +287,10 @@ func (provider *Provider) handleResponses() {
 				}
 				msg.AddBlock(block)
 				log.Debugf("Sending block for %s", cid)
+
+				// Response metric
+				ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "BLOCK"))
+				stats.Record(ctx, metrics.BitswapResponseCount.M(1))
 			}
 		}
 
@@ -304,12 +331,7 @@ func (provider *Provider) handleRetrievals() {
 				log.Errorf("Request for %s failed: %v", cid, err)
 			}
 			provider.blockManager.AwaitBlock(ctx, cid, func(block blocks.Block) {
-				provider.responseQueue.PushTasks(peerID, peertask.Task{
-					Topic:    cid,
-					Priority: 0,
-					Work:     block.Size,
-					Data:     sendBlock, // TODO: maybe check retrieval task for this
-				})
+				provider.queueSendBlock(peerID, task.Priority, block.Cid, block.Size)
 			})
 		}
 
@@ -327,4 +349,38 @@ func (provider *Provider) PeerConnected(peerID peer.ID) {
 
 func (provider *Provider) PeerDisconnected(peerID peer.ID) {
 	log.Infof("Peer %s disconnected", peerID)
+}
+
+func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Cid) {
+	provider.responseQueue.PushTasks(peerID, peertask.Task{
+		Topic:    cid,
+		Priority: priority,
+		Work:     cid.ByteLen(),
+		Data: ResponseData{
+			action: sendHave,
+		},
+	})
+}
+
+func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid cid.Cid, reason string) {
+	provider.responseQueue.PushTasks(peerID, peertask.Task{
+		Topic:    cid,
+		Priority: priority,
+		Work:     cid.ByteLen(),
+		Data: ResponseData{
+			action: sendDontHave,
+			reason: reason,
+		},
+	})
+}
+
+func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.Cid, size int) {
+	provider.responseQueue.PushTasks(peerID, peertask.Task{
+		Topic:    cid,
+		Priority: priority,
+		Work:     size,
+		Data: ResponseData{
+			action: sendBlock, // TODO: maybe check retrieval task for this
+		},
+	})
 }
