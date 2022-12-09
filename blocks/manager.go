@@ -55,7 +55,7 @@ func NewManager(inner blockstore.Blockstore, getAwaitTimeout time.Duration) *Man
 	return mgr
 }
 
-func (mgr *Manager) AwaitBlock(ctx context.Context, cid cid.Cid, callback func(Block, error)) error {
+func (mgr *Manager) AwaitBlock(ctx context.Context, cid cid.Cid, callback func(Block, error)) {
 	// We need to lock the blockstore here to make sure the requested block
 	// doesn't get added while being added to the waitlist
 	mgr.waitListLk.Lock()
@@ -67,7 +67,8 @@ func (mgr *Manager) AwaitBlock(ctx context.Context, cid cid.Cid, callback func(B
 	if err != nil {
 		if !ipld.IsNotFound(err) {
 			mgr.waitListLk.Unlock()
-			return err
+			callback(Block{}, err)
+			return
 		}
 
 		mgr.waitList[cid] = append(mgr.waitList[cid], waitListEntry{
@@ -76,15 +77,13 @@ func (mgr *Manager) AwaitBlock(ctx context.Context, cid cid.Cid, callback func(B
 		})
 
 		mgr.waitListLk.Unlock()
-		return nil
+		return
 	}
 
 	mgr.waitListLk.Unlock()
 
 	// Otherwise, we can immediately run the callback
 	callback(Block{cid, size}, nil)
-
-	return nil
 }
 
 func (mgr *Manager) Put(ctx context.Context, block blocks.Block) error {

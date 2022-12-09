@@ -202,8 +202,8 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				continue
 			}
 
-			if err := provider.blockManager.AwaitBlock(ctx, entry.Cid, func(_ blocks.Block, err error) {
-				if err != nil { // likely a timeout
+			provider.blockManager.AwaitBlock(ctx, entry.Cid, func(_ blocks.Block, err error) {
+				if err != nil {
 					logger.Debugf("Failed to load block: %s", err.Error())
 					provider.queueDontHave(ctx, sender, entry, "failed_block_load")
 				} else {
@@ -211,10 +211,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 					provider.queueHave(context.Background(), sender, entry)
 				}
 				provider.signalWork()
-			}); err != nil {
-				logger.Errorf("Failed to load block: %s", err.Error())
-				provider.queueDontHave(ctx, sender, entry, "failed_block_load")
-			}
+			})
 		case wantTypeBlock:
 			if err := provider.retriever.Request(entry.Cid); err != nil {
 				// If no candidates were found, there's nothing that can be done, so
@@ -228,8 +225,8 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				continue
 			}
 
-			if err := provider.blockManager.AwaitBlock(ctx, entry.Cid, func(block blocks.Block, err error) {
-				if err != nil { // likely a timeout
+			provider.blockManager.AwaitBlock(ctx, entry.Cid, func(block blocks.Block, err error) {
+				if err != nil {
 					logger.Debugf("Failed to load block: %s", err.Error())
 					provider.queueDontHave(ctx, sender, entry, "failed_block_load")
 				} else {
@@ -237,10 +234,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 					provider.queueBlock(context.Background(), sender, entry, block.Size)
 				}
 				provider.signalWork()
-			}); err != nil {
-				logger.Errorf("Failed to load block: %s", err.Error())
-				provider.queueDontHave(ctx, sender, entry, "failed_block_load")
-			}
+			})
 		}
 	}
 
