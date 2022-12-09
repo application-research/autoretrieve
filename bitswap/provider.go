@@ -202,8 +202,14 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				continue
 			}
 
-			if err := provider.blockManager.AwaitBlock(ctx, entry.Cid, func(_ blocks.Block) {
-				provider.queueHave(context.Background(), sender, entry)
+			if err := provider.blockManager.AwaitBlock(ctx, entry.Cid, func(_ blocks.Block, err error) {
+				if err != nil { // likely a timeout
+					logger.Debugf("Failed to load block: %s", err.Error())
+					provider.queueDontHave(ctx, sender, entry, "failed_block_load")
+				} else {
+					logger.Debugf("Successfully awaited block (want_have): %s", entry.Cid)
+					provider.queueHave(context.Background(), sender, entry)
+				}
 				provider.signalWork()
 			}); err != nil {
 				logger.Errorf("Failed to load block: %s", err.Error())
@@ -222,8 +228,14 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				continue
 			}
 
-			if err := provider.blockManager.AwaitBlock(ctx, entry.Cid, func(block blocks.Block) {
-				provider.queueBlock(context.Background(), sender, entry, block.Size)
+			if err := provider.blockManager.AwaitBlock(ctx, entry.Cid, func(block blocks.Block, err error) {
+				if err != nil { // likely a timeout
+					logger.Debugf("Failed to load block: %s", err.Error())
+					provider.queueDontHave(ctx, sender, entry, "failed_block_load")
+				} else {
+					logger.Debugf("Successfully awaited block (want_block): %s", entry.Cid)
+					provider.queueBlock(context.Background(), sender, entry, block.Size)
+				}
 				provider.signalWork()
 			}); err != nil {
 				logger.Errorf("Failed to load block: %s", err.Error())
@@ -274,14 +286,26 @@ func (provider *Provider) runWorker() {
 		for _, task := range tasks {
 			switch topic := task.Topic.(type) {
 			case topicHave:
-				msg.AddHave(cid.Cid(topic))
+				have, err := provider.blockManager.Has(context.Background(), cid.Cid(topic))
+				if err != nil {
+					logger.Errorf("Block load error: %s", err.Error())
+					msg.AddDontHave(cid.Cid(topic))
+				} else if !have {
+					logger.Debugf("Had a block but lost it for want_have: %s", cid.Cid(topic))
+					msg.AddDontHave(cid.Cid(topic))
+				} else {
+					logger.Debugf("Sending want_have to peer: %s", cid.Cid(topic))
+					msg.AddHave(cid.Cid(topic))
+				}
 			case topicDontHave:
 				msg.AddDontHave(cid.Cid(topic))
 			case topicBlock:
 				blk, err := provider.blockManager.Get(context.Background(), cid.Cid(topic))
 				if err != nil {
+					logger.Debugf("Had a block but lost it for want_block: %s (%s)", cid.Cid(topic), err.Error())
 					msg.AddDontHave(cid.Cid(topic))
 				} else {
+					logger.Debugf("Sending want_block to peer: %s", cid.Cid(topic))
 					msg.AddBlock(blk)
 				}
 			}
