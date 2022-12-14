@@ -335,7 +335,13 @@ func (provider *Provider) handleRetrievals() {
 			// Try to start a new retrieval (if it's already running then no
 			// need to error, just continue on to await block)
 			if err := provider.retriever.Request(cid); err != nil && !errors.As(err, &lassieretriever.ErrRetrievalAlreadyRunning{}) {
-				log.Errorf("Request for %s failed: %v", cid, err)
+				if errors.Is(err, lassieretriever.ErrNoCandidates) {
+					// Just do a debug print if there were no candidates because this happens a lot
+					log.Debugf("No candidates for %s", cid)
+				} else {
+					// Otherwise, there was a real failure, print with more importance
+					log.Errorf("Request for %s failed: %v", cid, err)
+				}
 			}
 			provider.blockManager.AwaitBlock(ctx, cid, func(block blocks.Block, err error) {
 				if err != nil {
