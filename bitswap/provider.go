@@ -48,6 +48,7 @@ const (
 )
 
 const targetMessageSize = 1 << 10
+const sendBlockThreshold = 2 << 10
 
 type ProviderConfig struct {
 	CidBlacklist     map[cid.Cid]bool
@@ -208,8 +209,13 @@ func (provider *Provider) handleRequest(
 
 		switch entry.WantType {
 		case wantTypeHave:
-			log.Debugf("Want have for %s", entry.Cid)
-			provider.queueSendHave(peerID, int(entry.Priority), entry.Cid)
+			if size < sendBlockThreshold {
+				log.Debugf("Want have for %s (under send block threshold)", entry.Cid)
+				provider.queueSendBlock(peerID, int(entry.Priority), entry.Cid, size)
+			} else {
+				log.Debugf("Want have for %s", entry.Cid)
+				provider.queueSendHave(peerID, int(entry.Priority), entry.Cid)
+			}
 			return nil
 		case wantTypeBlock:
 			log.Debugf("Want block for %s", entry.Cid)
