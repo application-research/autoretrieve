@@ -74,6 +74,16 @@ type Provider struct {
 	retrievalQueue *peertaskqueue.PeerTaskQueue
 }
 
+type overwriteTaskMerger struct{}
+
+func (*overwriteTaskMerger) HasNewInfo(task peertask.Task, existing []*peertask.Task) bool {
+	return true
+}
+
+func (*overwriteTaskMerger) Merge(task peertask.Task, existing *peertask.Task) {
+	*existing = task
+}
+
 func NewProvider(
 	ctx context.Context,
 	config ProviderConfig,
@@ -114,9 +124,9 @@ func NewProvider(
 		network:        network.NewFromIpfsHost(host, routing),
 		blockManager:   blockManager,
 		retriever:      retriever,
-		requestQueue:   peertaskqueue.New(),
-		responseQueue:  peertaskqueue.New(),
-		retrievalQueue: peertaskqueue.New(),
+		requestQueue:   peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{})),
+		responseQueue:  peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{})),
+		retrievalQueue: peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{})),
 	}
 
 	provider.network.Start(provider)
