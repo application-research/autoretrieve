@@ -193,6 +193,7 @@ func (provider *Provider) handleRequest(
 	if entry.Cancel {
 		log.Debugf("Cancelling request for %s", entry.Cid)
 		provider.responseQueue.Remove(entry.Cid, peerID)
+		provider.retrievalQueue.Remove(entry.Cid, peerID)
 		return nil
 	}
 
