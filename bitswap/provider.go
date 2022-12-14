@@ -25,7 +25,7 @@ import (
 	"go.opencensus.io/tag"
 )
 
-var log = logging.Logger("autoretrieve")
+var log = logging.Logger("provider")
 
 // Wantlist want type redeclarations
 const (
