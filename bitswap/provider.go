@@ -331,8 +331,14 @@ func (provider *Provider) handleRetrievals() {
 			if err := provider.retriever.Request(cid); err != nil && !errors.As(err, &lassieretriever.ErrRetrievalAlreadyRunning{}) {
 				log.Errorf("Request for %s failed: %v", cid, err)
 			}
-			provider.blockManager.AwaitBlock(ctx, cid, func(block blocks.Block) {
-				provider.queueSendBlock(peerID, task.Priority, block.Cid, block.Size)
+			provider.blockManager.AwaitBlock(ctx, cid, func(block blocks.Block, err error) {
+				if err != nil {
+					log.Debugf("Async block load failed: %s", err)
+					provider.queueSendDontHave(peerID, task.Priority, block.Cid, "failed_block_load")
+				} else {
+					log.Debugf("Async block load completed: %s", block.Cid)
+					provider.queueSendBlock(peerID, task.Priority, block.Cid, block.Size)
+				}
 			})
 		}
 
@@ -353,6 +359,7 @@ func (provider *Provider) PeerDisconnected(peerID peer.ID) {
 }
 
 func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Cid) {
+	log.Debugf("Sending HAVE for %s to %s", cid, peerID)
 	provider.responseQueue.PushTasks(peerID, peertask.Task{
 		Topic:    cid,
 		Priority: priority,
@@ -364,6 +371,7 @@ func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Ci
 }
 
 func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid cid.Cid, reason string) {
+	log.Debugf("Sending DONT_HAVE for %s to %s", cid, peerID)
 	provider.responseQueue.PushTasks(peerID, peertask.Task{
 		Topic:    cid,
 		Priority: priority,
@@ -376,6 +384,7 @@ func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid ci
 }
 
 func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.Cid, size int) {
+	log.Debugf("Sending HAVE for %s to %s", cid, peerID)
 	provider.responseQueue.PushTasks(peerID, peertask.Task{
 		Topic:    cid,
 		Priority: priority,

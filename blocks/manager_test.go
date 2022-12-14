@@ -23,12 +23,13 @@ func TestPutBlock(t *testing.T) {
 	receivedBlk := make(chan Block)
 	errChan := make(chan error, 1)
 	go func() {
-		err := manager.AwaitBlock(ctx, blk.Cid(), func(blk Block) {
-			receivedBlk <- blk
+		manager.AwaitBlock(ctx, blk.Cid(), func(blk Block, err error) {
+			if err != nil {
+				errChan <- err
+			} else {
+				receivedBlk <- blk
+			}
 		})
-		if err != nil {
-			errChan <- err
-		}
 	}()
 	err := manager.Put(ctx, blk)
 	if err != nil {
@@ -60,12 +61,13 @@ func TestPutMany(t *testing.T) {
 	errChan := make(chan error, 20)
 	go func() {
 		for _, blk := range blks {
-			err := manager.AwaitBlock(ctx, blk.Cid(), func(blk Block) {
-				receivedBlocks <- blk.Cid
+			manager.AwaitBlock(ctx, blk.Cid(), func(blk Block, err error) {
+				if err != nil {
+					errChan <- err
+				} else {
+					receivedBlocks <- blk.Cid
+				}
 			})
-			if err != nil {
-				errChan <- err
-			}
 		}
 	}()
 	err := manager.PutMany(ctx, blks)
@@ -94,7 +96,11 @@ func TestCleanup(t *testing.T) {
 	gen := blocksutil.NewBlockGenerator()
 	for i := 0; i < testCount; i++ {
 		cid := gen.Next().Cid()
-		manager.AwaitBlock(ctx, cid, func(b Block) { t.Fatalf("This should not happen") })
+		manager.AwaitBlock(ctx, cid, func(b Block, err error) {
+			if err != ErrWaitTimeout {
+				t.Fatalf("This should not happen")
+			}
+		})
 	}
 
 	// manager.waitListLk.Lock()
