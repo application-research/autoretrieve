@@ -50,9 +50,11 @@ const (
 const targetMessageSize = 1 << 10
 
 type ProviderConfig struct {
-	CidBlacklist      map[cid.Cid]bool
-	MaxBitswapWorkers uint
-	RoutingTableType  RoutingTableType
+	CidBlacklist     map[cid.Cid]bool
+	RequestWorkers   uint
+	ResponseWorkers  uint
+	RetrievalWorkers uint
+	RoutingTableType RoutingTableType
 }
 
 type Provider struct {
@@ -69,7 +71,6 @@ type Provider struct {
 
 	// CIDs that need to be retrieved - work is 1 per CID queued
 	retrievalQueue *peertaskqueue.PeerTaskQueue
-	workReady      chan struct{}
 }
 
 func NewProvider(
@@ -115,7 +116,6 @@ func NewProvider(
 		requestQueue:   peertaskqueue.New(),
 		responseQueue:  peertaskqueue.New(),
 		retrievalQueue: peertaskqueue.New(),
-		workReady:      make(chan struct{}, config.MaxBitswapWorkers),
 	}
 
 	provider.network.Start(provider)
