@@ -363,11 +363,11 @@ func (provider *Provider) ReceiveError(err error) {
 }
 
 func (provider *Provider) PeerConnected(peerID peer.ID) {
-	log.Infof("Peer %s connected", peerID)
+	log.Debugf("Peer %s connected", peerID)
 }
 
 func (provider *Provider) PeerDisconnected(peerID peer.ID) {
-	log.Infof("Peer %s disconnected", peerID)
+	log.Debugf("Peer %s disconnected", peerID)
 }
 
 func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Cid) {
