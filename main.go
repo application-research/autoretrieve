@@ -86,11 +86,6 @@ func main() {
 			Usage:   "Whether to present output about the current state of the libp2p resource manager",
 			EnvVars: []string{"AUTORETRIEVE_LOG_RESOURCE_MANAGER"},
 		},
-		&cli.BoolFlag{
-			Name:    "log-retrievals",
-			Usage:   "Whether to present periodic output about the progress of retrievals",
-			EnvVars: []string{"AUTORETRIEVE_LOG_RETRIEVALS"},
-		},
 	}
 
 	app.Action = cmd
@@ -474,10 +469,6 @@ func applyConfigCLIOverrides(ctx *cli.Context, cfg *Config) error {
 
 	if ctx.IsSet("log-resource-manager") {
 		cfg.LogResourceManager = ctx.Bool("log-resource-manager")
-	}
-
-	if ctx.IsSet("log-retrievals") {
-		cfg.LogRetrievals = ctx.Bool("log-retrievals")
 	}
 
 	return nil

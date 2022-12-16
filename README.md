@@ -91,6 +91,5 @@ GLOBAL OPTIONS:
    --disable-retrieval           Whether to disable the retriever module, for testing provider only (default: false) [$AUTORETRIEVE_DISABLE_RETRIEVAL]
    --routing-table-type value    [dht|fullrt|disabled] [$AUTORETRIEVE_ROUTING_TABLE_TYPE]
    --log-resource-manager        Whether to present output about the current state of the libp2p resource manager (default: false) [$AUTORETRIEVE_LOG_RESOURCE_MANAGER]
-   --log-retrievals              Whether to present periodic output about the progress of retrievals (default: false) [$AUTORETRIEVE_LOG_RETRIEVALS]
    --help, -h                    show help (default: false)
 ```
