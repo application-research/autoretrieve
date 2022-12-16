@@ -13,23 +13,25 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/application-research/autoretrieve/bitswap"
 	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/endpoint"
+	"github.com/application-research/autoretrieve/minerpeergetter"
+	"github.com/application-research/autoretrieve/paychannelmanager"
 	"github.com/application-research/filclient"
 	"github.com/application-research/filclient/keystore"
-	"github.com/application-research/filclient/rep"
-	"github.com/filecoin-project/go-address"
-	datatransfer "github.com/filecoin-project/go-data-transfer"
-	"github.com/filecoin-project/go-fil-markets/retrievalmarket"
+	lassieclient "github.com/filecoin-project/lassie/pkg/client"
 	lassieeventrecorder "github.com/filecoin-project/lassie/pkg/eventrecorder"
 	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
+	rpcstmgr "github.com/filecoin-project/lotus/chain/stmgr/rpc"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	lcli "github.com/filecoin-project/lotus/cli"
+	"github.com/filecoin-project/lotus/paychmgr"
 	"github.com/ipfs/go-cid"
+	ipfsdatastore "github.com/ipfs/go-datastore"
+	"github.com/ipfs/go-datastore/namespace"
 	flatfs "github.com/ipfs/go-ds-flatfs"
 	leveldb "github.com/ipfs/go-ds-leveldb"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
@@ -41,9 +43,6 @@ import (
 	"github.com/multiformats/go-multiaddr"
 	"github.com/urfave/cli/v2"
 )
-
-var dtHeaders = "peer\tcid\tstatus\ttransferred\tmessage"
-var dtOutput = "%s\t%s\t%s\t%d\t%s\n"
 
 var statFmtString = `global conn stats: 
 memory: %d,
@@ -134,29 +133,35 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		return nil, fmt.Errorf("wallet initialization failed: %w", err)
 	}
 
-	walletAddr, err := wallet.GetDefault()
-	if err != nil {
-		logger.Warnf("Could not load any default wallet address, only free retrievals will be attempted: %v", err)
-		walletAddr = address.Undef
-	} else {
-		logger.Infof("Using default wallet address %s", walletAddr)
+	// Set up the PayChannelManager
+	ctx, shutdown := context.WithCancel(context.Background())
+	mpusher := filclient.NewMsgPusher(api, wallet)
+	rpcStateMgr := rpcstmgr.NewRPCStateManager(api)
+	pchds := namespace.Wrap(datastore, ipfsdatastore.NewKey("paych"))
+	payChanStore := paychmgr.NewStore(pchds)
+	payChanApi := &payChannelApiProvider{
+		Gateway: api,
+		wallet:  wallet,
+		mp:      mpusher,
 	}
 
-	fc, err := filclient.NewClient(
-		host,
-		api,
-		wallet,
-		walletAddr,
-		blockManager,
+	payChanMgr := paychannelmanager.NewLassiePayChannelManager(ctx, shutdown, rpcStateMgr, payChanStore, payChanApi)
+	if err := payChanMgr.Start(); err != nil {
+		return nil, err
+	}
+
+	retrievalClient, err := lassieclient.NewClient(
+		blockstore,
 		datastore,
-		dataDir,
-		func(cfg *filclient.Config) {
-			cfg.LogRetrievalProgressEvents = true
-		},
+		host,
+		payChanMgr,
 	)
 	if err != nil {
-		logger.Errorf("FilClient initialization failed: %v", err)
+		logger.Errorf("RetrievalClient initialization failed: %v", err)
 	}
+
+	minerPeerGetter := minerpeergetter.NewMinerPeerGetter(api)
+
 	// Initialize Filecoin retriever
 	var retriever *lassieretriever.Retriever
 	if !cfg.DisableRetrieval {
@@ -164,7 +169,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		switch cfg.LookupEndpointType {
 		case EndpointTypeEstuary:
 			logger.Infof("Using Estuary endpoint type")
-			ep = endpoint.NewEstuaryEndpoint(fc, cfg.LookupEndpointURL)
+			ep = endpoint.NewEstuaryEndpoint(cfg.LookupEndpointURL, minerPeerGetter)
 		case EndpointTypeIndexer:
 			logger.Infof("Using indexer endpoint type")
 			ep = endpoint.NewIndexerEndpoint(cfg.LookupEndpointURL)
@@ -172,7 +177,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 			return nil, errors.New("unrecognized endpoint type")
 		}
 
-		retrieverCfg, err := cfg.ExtractFilecoinRetrieverConfig(cctx.Context, fc)
+		retrieverCfg, err := cfg.ExtractFilecoinRetrieverConfig(cctx.Context, minerPeerGetter)
 		if err != nil {
 			return nil, err
 		}
@@ -181,7 +186,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 			return blockManager.Has(cctx.Context, c)
 		}
 
-		retriever, err = lassieretriever.NewRetriever(cctx.Context, retrieverCfg, &filclientLassieWrapper{fc}, ep, confirmer)
+		retriever, err = lassieretriever.NewRetriever(cctx.Context, retrieverCfg, retrievalClient, ep, confirmer)
 		if err != nil {
 			return nil, err
 		}
@@ -192,40 +197,6 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 				return nil, err
 			}
 			retriever.RegisterListener(lassieeventrecorder.NewEventRecorder(cctx.Context, cfg.InstanceId, cfg.EventRecorderEndpointURL, eventRecorderEndpointAuthorization))
-		}
-		if cfg.LogRetrievals {
-			w := tabwriter.NewWriter(os.Stdout, 5, 0, 3, ' ', 0)
-			go func() {
-				for range time.Tick(time.Second * 10) {
-					select {
-					case <-cctx.Context.Done():
-						return
-					default:
-					}
-					transfers, err := fc.TransfersInProgress(cctx.Context)
-					if err != nil {
-						logger.Errorf("unable to fetch transfers in progress: %s", err.Error())
-						return
-					}
-					totalSuccesses := 0
-					totalFailures := 0
-					fmt.Printf("\nData transfer status\n\n")
-					fmt.Fprintln(w, dtHeaders)
-					for _, state := range transfers {
-						if state.Status == datatransfer.Cancelled || state.Status == datatransfer.Failed {
-							totalFailures++
-							continue
-						}
-						if state.Status == datatransfer.Completed {
-							totalSuccesses++
-							continue
-						}
-						fmt.Fprintf(w, dtOutput, state.RemotePeer, state.BaseCid, datatransfer.Statuses[state.Status], state.Received, state.Message)
-					}
-					w.Flush()
-					fmt.Printf("\nTotal Successes: %d, Total Failures: %d\n\n", totalSuccesses, totalFailures)
-				}
-			}()
 		}
 	}
 
@@ -424,65 +395,4 @@ func initHost(ctx context.Context, dataDir string, resourceManagerStats bool, li
 		}()
 	}
 	return host, nil
-}
-
-// ---- transitional wrappers to bridge filclient into something usable by lassie in its current state ----- //
-
-var _ rep.RetrievalSubscriber = &filclientLassieSubscriberWrapper{}
-var _ lassieretriever.FilClient = &filclientLassieWrapper{}
-
-type filclientLassieSubscriberWrapper struct {
-	sub lassieretriever.RetrievalSubscriber
-}
-
-func (flsw *filclientLassieSubscriberWrapper) OnRetrievalEvent(event rep.RetrievalEvent) {
-	switch ret := event.(type) {
-	case rep.RetrievalEventConnect:
-		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventConnect(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr()))
-	case rep.RetrievalEventQueryAsk:
-		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventQueryAsk(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr(), ret.QueryResponse()))
-	case rep.RetrievalEventProposed:
-		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventProposed(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr()))
-	case rep.RetrievalEventAccepted:
-		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventAccepted(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr()))
-	case rep.RetrievalEventFirstByte:
-		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventFirstByte(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr()))
-	case rep.RetrievalEventFailure:
-		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventFailure(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr(), ret.ErrorMessage()))
-	case rep.RetrievalEventSuccess:
-		flsw.sub.OnRetrievalEvent(lassieretriever.NewRetrievalEventSuccess(lassieretriever.Phase(ret.Phase()), ret.PayloadCid(), ret.StorageProviderId(), ret.StorageProviderAddr(), ret.ReceivedSize(), ret.ReceivedCids(), ret.Duration(), ret.TotalPayment()))
-	default:
-		logger.Errorf("unexpected retrieval event type %T: %v", ret, ret)
-	}
-}
-
-type filclientLassieWrapper struct {
-	fc *filclient.FilClient
-}
-
-func (flw *filclientLassieWrapper) RetrievalQueryToPeer(ctx context.Context, minerPeer peer.AddrInfo, pcid cid.Cid) (*retrievalmarket.QueryResponse, error) {
-	return flw.fc.RetrievalQueryToPeer(ctx, minerPeer, pcid)
-}
-
-func (flw *filclientLassieWrapper) RetrieveContentFromPeerAsync(
-	ctx context.Context,
-	peerID peer.ID,
-	minerWallet address.Address,
-	proposal *retrievalmarket.DealProposal,
-) (<-chan lassieretriever.RetrievalResult, <-chan uint64, func()) {
-	lassieResultChan := make(chan lassieretriever.RetrievalResult, 1)
-
-	resultChan, onProgressChan, gracefulShutdownCb := flw.fc.RetrieveContentFromPeerAsync(ctx, peerID, minerWallet, proposal)
-	go func() {
-		result := <-resultChan
-		lassieResultChan <- lassieretriever.RetrievalResult{
-			RetrievalStats: (*lassieretriever.RetrievalStats)(result.RetrievalStats),
-			Err:            result.Err,
-		}
-	}()
-	return lassieResultChan, onProgressChan, gracefulShutdownCb
-}
-
-func (flw *filclientLassieWrapper) SubscribeToRetrievalEvents(subscriber lassieretriever.RetrievalSubscriber) {
-	flw.fc.SubscribeToRetrievalEvents(&filclientLassieSubscriberWrapper{subscriber})
 }
