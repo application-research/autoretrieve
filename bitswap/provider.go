@@ -354,7 +354,7 @@ func (provider *Provider) handleRetrievals() {
 						log.Errorf("Request for %s failed: %v", cid, err)
 					}
 				} else {
-					log.Debugf("Retrieval already running for %s, no new one will be started")
+					log.Debugf("Retrieval already running for %s, no new one will be started", cid)
 				}
 			} else {
 				log.Infof("Started retrieval for %s", cid)
