@@ -10,7 +10,7 @@ require (
 	github.com/filecoin-project/go-data-transfer v1.15.2
 	github.com/filecoin-project/go-fil-markets v1.25.2
 	github.com/filecoin-project/index-provider v0.9.1
-	github.com/filecoin-project/lassie v0.0.0-20221201201117-ea9929030b13
+	github.com/filecoin-project/lassie v0.0.0-20221215224558-f49862aefedd
 	github.com/filecoin-project/lotus v1.18.0
 	github.com/filecoin-project/storetheindex v0.4.30-0.20221114113647-683091f8e893
 	github.com/ipfs/go-bitswap v0.10.2
