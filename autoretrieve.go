@@ -18,10 +18,10 @@ import (
 	"github.com/application-research/autoretrieve/bitswap"
 	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/endpoint"
+	"github.com/application-research/autoretrieve/keystore"
+	"github.com/application-research/autoretrieve/messagepusher"
 	"github.com/application-research/autoretrieve/minerpeergetter"
 	"github.com/application-research/autoretrieve/paychannelmanager"
-	"github.com/application-research/filclient"
-	"github.com/application-research/filclient/keystore"
 	lassieclient "github.com/filecoin-project/lassie/pkg/client"
 	lassieeventrecorder "github.com/filecoin-project/lassie/pkg/eventrecorder"
 	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
@@ -121,8 +121,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		return nil, err
 	}
 
-	// Set up FilClient
-
+	// Set up wallet
 	keystore, err := keystore.OpenOrInitKeystore(filepath.Join(dataDir, walletSubdir))
 	if err != nil {
 		return nil, fmt.Errorf("keystore initialization failed: %w", err)
@@ -135,7 +134,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 
 	// Set up the PayChannelManager
 	ctx, shutdown := context.WithCancel(context.Background())
-	mpusher := filclient.NewMsgPusher(api, wallet)
+	mpusher := messagepusher.NewMsgPusher(api, wallet)
 	rpcStateMgr := rpcstmgr.NewRPCStateManager(api)
 	pchds := namespace.Wrap(datastore, ipfsdatastore.NewKey("paych"))
 	payChanStore := paychmgr.NewStore(pchds)
@@ -150,6 +149,7 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		return nil, err
 	}
 
+	// Instantiate client
 	retrievalClient, err := lassieclient.NewClient(
 		blockstore,
 		datastore,

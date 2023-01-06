@@ -3,7 +3,7 @@ package main
 import (
 	"context"
 
-	"github.com/application-research/filclient"
+	"github.com/application-research/autoretrieve/messagepusher"
 	"github.com/filecoin-project/go-address"
 	"github.com/filecoin-project/go-state-types/crypto"
 	"github.com/filecoin-project/lotus/api"
@@ -14,7 +14,7 @@ import (
 type payChannelApiProvider struct {
 	api.Gateway
 	wallet *wallet.LocalWallet
-	mp     *filclient.MsgPusher
+	mp     *messagepusher.MsgPusher
 }
 
 func (a *payChannelApiProvider) MpoolPushMessage(ctx context.Context, msg *types.Message, maxFee *api.MessageSendSpec) (*types.SignedMessage, error) {
