@@ -1,7 +1,7 @@
 # Autoretrieve uses Docker Buildkit to speed up builds, make sure
 # DOCKER_BUILDKIT=1 is set
 
-FROM golang:1.18 AS builder
+FROM golang:1.19 AS builder
 
 # Install rustup
 ENV RUSTUP_HOME=/usr/local/rustup \

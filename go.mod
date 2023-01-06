@@ -1,6 +1,6 @@
 module github.com/application-research/autoretrieve
 
-go 1.18
+go 1.19
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
