@@ -22,7 +22,7 @@ Autoretrieve is at its core a Bitswap server. When a Bitswap request comes in, A
 
 In order for IPFS clients to be able to retrieve Filecoin data using Autoretrieve, they must be connected to Autoretrieve. Currently, Autoretrieve can be advertised to the indexer (and by extension the DHT) by Estuary. Autoretrieve does not currently have an independent way to advertise its own data.
 
-If an Autoretrieve node is not advertised, clients may still download data from it by accidentally connecting.
+If an Autoretrieve node is not advertised, clients may still download data from it if a connection is established either manually, or by chance while walking through the DHT searching for other providers.
 
 ## Usage
 
