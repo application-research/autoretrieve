@@ -28,8 +28,8 @@ import (
 	format "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-merkledag"
-	crypto "github.com/libp2p/go-libp2p-core/crypto"
-	"github.com/libp2p/go-libp2p-core/peer"
+	crypto "github.com/libp2p/go-libp2p/core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/urfave/cli/v2"
 	"gopkg.in/yaml.v2"
 )
@@ -85,11 +85,6 @@ func main() {
 			Name:    "log-resource-manager",
 			Usage:   "Whether to present output about the current state of the libp2p resource manager",
 			EnvVars: []string{"AUTORETRIEVE_LOG_RESOURCE_MANAGER"},
-		},
-		&cli.BoolFlag{
-			Name:    "log-retrievals",
-			Usage:   "Whether to present periodic output about the progress of retrievals",
-			EnvVars: []string{"AUTORETRIEVE_LOG_RETRIEVALS"},
 		},
 	}
 
@@ -474,10 +469,6 @@ func applyConfigCLIOverrides(ctx *cli.Context, cfg *Config) error {
 
 	if ctx.IsSet("log-resource-manager") {
 		cfg.LogResourceManager = ctx.Bool("log-resource-manager")
-	}
-
-	if ctx.IsSet("log-retrievals") {
-		cfg.LogRetrievals = ctx.Bool("log-retrievals")
 	}
 
 	return nil

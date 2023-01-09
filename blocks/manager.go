@@ -2,6 +2,7 @@ package blocks
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 
@@ -14,7 +15,12 @@ import (
 
 var log = logging.Logger("blockstore")
 
-type Block = blocks.Block
+var ErrWaitTimeout = errors.New("wait timeout for block")
+
+type Block struct {
+	Cid  cid.Cid
+	Size int
+}
 
 // Manager is a blockstore with thread safe notification hooking for put
 // events.
@@ -27,15 +33,16 @@ type Manager struct {
 }
 
 type waitListEntry struct {
-	callback     func(Block)
+	callback     func(Block, error)
 	registeredAt time.Time
 }
 
 func NewManager(inner blockstore.Blockstore, getAwaitTimeout time.Duration) *Manager {
 	mgr := &Manager{
-		Blockstore:  inner,
-		readyBlocks: make(chan Block, 10),
-		waitList:    make(map[cid.Cid][]waitListEntry),
+		Blockstore:      inner,
+		readyBlocks:     make(chan Block, 10),
+		waitList:        make(map[cid.Cid][]waitListEntry),
+		getAwaitTimeout: getAwaitTimeout,
 	}
 
 	go mgr.startPollReadyBlocks()
@@ -48,19 +55,20 @@ func NewManager(inner blockstore.Blockstore, getAwaitTimeout time.Duration) *Man
 	return mgr
 }
 
-func (mgr *Manager) GetAwait(ctx context.Context, cid cid.Cid, callback func(Block)) error {
+func (mgr *Manager) AwaitBlock(ctx context.Context, cid cid.Cid, callback func(Block, error)) {
 	// We need to lock the blockstore here to make sure the requested block
 	// doesn't get added while being added to the waitlist
 	mgr.waitListLk.Lock()
 
-	block, err := mgr.Get(ctx, cid)
+	size, err := mgr.GetSize(ctx, cid)
 
 	// If we couldn't get the block, we add it to the waitlist - the block will
 	// be populated later during a Put or PutMany event
 	if err != nil {
 		if !ipld.IsNotFound(err) {
 			mgr.waitListLk.Unlock()
-			return err
+			callback(Block{}, err)
+			return
 		}
 
 		mgr.waitList[cid] = append(mgr.waitList[cid], waitListEntry{
@@ -69,16 +77,13 @@ func (mgr *Manager) GetAwait(ctx context.Context, cid cid.Cid, callback func(Blo
 		})
 
 		mgr.waitListLk.Unlock()
-
-		return nil
+		return
 	}
 
 	mgr.waitListLk.Unlock()
 
 	// Otherwise, we can immediately run the callback
-	callback(block)
-
-	return nil
+	callback(Block{cid, size}, nil)
 }
 
 func (mgr *Manager) Put(ctx context.Context, block blocks.Block) error {
@@ -90,7 +95,7 @@ func (mgr *Manager) Put(ctx context.Context, block blocks.Block) error {
 	}
 
 	select {
-	case mgr.readyBlocks <- block:
+	case mgr.readyBlocks <- Block{block.Cid(), len(block.RawData())}:
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -108,7 +113,7 @@ func (mgr *Manager) PutMany(ctx context.Context, blocks []blocks.Block) error {
 
 	for _, block := range blocks {
 		select {
-		case mgr.readyBlocks <- block:
+		case mgr.readyBlocks <- Block{block.Cid(), len(block.RawData())}:
 		case <-ctx.Done():
 			return ctx.Err()
 		}
@@ -124,16 +129,18 @@ func (mgr *Manager) startPollReadyBlocks() {
 }
 
 func (mgr *Manager) notifyWaitCallbacks(block Block) {
-	cid := block.Cid()
-
+	cid := block.Cid
 	mgr.waitListLk.Lock()
-	if entries, ok := mgr.waitList[cid]; ok {
+	entries, ok := mgr.waitList[cid]
+	if ok {
 		delete(mgr.waitList, cid)
-		for _, entry := range entries {
-			entry.callback(block)
-		}
 	}
 	mgr.waitListLk.Unlock()
+	if ok {
+		for _, entry := range entries {
+			entry.callback(block, nil)
+		}
+	}
 }
 
 func (mgr *Manager) startPollCleanup() {
@@ -147,6 +154,7 @@ func (mgr *Manager) startPollCleanup() {
 					// ...and if so, delete this element by replacing it with
 					// the last element of the slice and shrinking the length by
 					// 1, and step the index back
+					mgr.waitList[cid][i].callback(Block{}, ErrWaitTimeout)
 					mgr.waitList[cid][i] = mgr.waitList[cid][len(mgr.waitList[cid])-1]
 					mgr.waitList[cid] = mgr.waitList[cid][:len(mgr.waitList[cid])-1]
 					i--

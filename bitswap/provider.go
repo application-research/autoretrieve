@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/application-research/autoretrieve/blocks"
-	"github.com/application-research/autoretrieve/filecoin"
 	"github.com/application-research/autoretrieve/metrics"
+	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
 	"github.com/ipfs/go-bitswap/message"
 	bitswap_message_pb "github.com/ipfs/go-bitswap/message/pb"
 	"github.com/ipfs/go-bitswap/network"
@@ -17,11 +17,11 @@ import (
 	"github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-peertaskqueue"
 	"github.com/ipfs/go-peertaskqueue/peertask"
-	"github.com/libp2p/go-libp2p-core/host"
-	"github.com/libp2p/go-libp2p-core/peer"
-	"github.com/libp2p/go-libp2p-core/routing"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/fullrt"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/routing"
 	"go.opencensus.io/stats"
 	"go.opencensus.io/tag"
 )
@@ -38,7 +38,7 @@ const (
 type (
 	topicHave     cid.Cid
 	topicDontHave cid.Cid
-	topicBlock    blocks.Block
+	topicBlock    cid.Cid
 )
 
 const targetMessageSize = 1 << 10
@@ -53,7 +53,7 @@ type Provider struct {
 	config       ProviderConfig
 	network      network.BitSwapNetwork
 	blockManager *blocks.Manager
-	retriever    *filecoin.Retriever
+	retriever    *lassieretriever.Retriever
 	taskQueue    *peertaskqueue.PeerTaskQueue
 	workReady    chan struct{}
 }
@@ -64,7 +64,7 @@ func NewProvider(
 	host host.Host,
 	datastore datastore.Batching,
 	blockManager *blocks.Manager,
-	retriever *filecoin.Retriever,
+	retriever *lassieretriever.Retriever,
 ) (*Provider, error) {
 
 	var routing routing.ContentRouting
@@ -102,7 +102,7 @@ func NewProvider(
 		workReady:    make(chan struct{}, config.MaxBitswapWorkers),
 	}
 
-	provider.network.SetDelegate(provider)
+	provider.network.Start(provider)
 
 	for i := uint(0); i < config.MaxBitswapWorkers; i++ {
 		go provider.runWorker()
@@ -146,14 +146,14 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 			// If the block was found, queue HAVE and move on...
 			if has {
 				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
-				provider.queueHave(ctx, sender, entry, entry.Cid)
+				provider.queueHave(ctx, sender, entry)
 				continue
 			}
 
 			// ...otherwise, check retrieval candidates for it
 		case wantTypeBlock:
 			// For WANT_BLOCK, try to get the block
-			block, err := provider.blockManager.Get(ctx, entry.Cid)
+			size, err := provider.blockManager.GetSize(ctx, entry.Cid)
 
 			// If there was a problem (aside from block not found), log and move
 			// on
@@ -166,7 +166,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 			// on...
 			if !ipld.IsNotFound(err) {
 				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
-				provider.queueBlock(ctx, sender, entry, block)
+				provider.queueBlock(ctx, sender, entry, size)
 				continue
 			}
 
@@ -195,40 +195,46 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 				// queue DONT_HAVE and move on
 				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
 
-				if !errors.Is(err, filecoin.ErrNoCandidates) {
+				if !errors.Is(err, lassieretriever.ErrNoCandidates) {
 					logger.Warnf("Could not get candidates: %s", err.Error())
 				}
 
 				continue
 			}
 
-			if err := provider.blockManager.GetAwait(ctx, entry.Cid, func(block blocks.Block) {
-				provider.queueHave(context.Background(), sender, entry, block.Cid())
+			provider.blockManager.AwaitBlock(ctx, entry.Cid, func(_ blocks.Block, err error) {
+				if err != nil {
+					logger.Debugf("Failed to load block: %s", err.Error())
+					provider.queueDontHave(ctx, sender, entry, "failed_block_load")
+				} else {
+					logger.Debugf("Successfully awaited block (want_have): %s", entry.Cid)
+					provider.queueHave(context.Background(), sender, entry)
+				}
 				provider.signalWork()
-			}); err != nil {
-				logger.Errorf("Failed to load block: %s", err.Error())
-				provider.queueDontHave(ctx, sender, entry, "failed_block_load")
-			}
+			})
 		case wantTypeBlock:
 			if err := provider.retriever.Request(entry.Cid); err != nil {
 				// If no candidates were found, there's nothing that can be done, so
 				// queue DONT_HAVE and move on
 				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
 
-				if !errors.Is(err, filecoin.ErrNoCandidates) {
+				if !errors.Is(err, lassieretriever.ErrNoCandidates) {
 					logger.Warnf("Could not get candidates: %s", err.Error())
 				}
 
 				continue
 			}
 
-			if err := provider.blockManager.GetAwait(ctx, entry.Cid, func(block blocks.Block) {
-				provider.queueBlock(context.Background(), sender, entry, block)
+			provider.blockManager.AwaitBlock(ctx, entry.Cid, func(block blocks.Block, err error) {
+				if err != nil {
+					logger.Debugf("Failed to load block: %s", err.Error())
+					provider.queueDontHave(ctx, sender, entry, "failed_block_load")
+				} else {
+					logger.Debugf("Successfully awaited block (want_block): %s", entry.Cid)
+					provider.queueBlock(context.Background(), sender, entry, block.Size)
+				}
 				provider.signalWork()
-			}); err != nil {
-				logger.Errorf("Failed to load block: %s", err.Error())
-				provider.queueDontHave(ctx, sender, entry, "failed_block_load")
-			}
+			})
 		}
 	}
 
@@ -270,14 +276,32 @@ func (provider *Provider) runWorker() {
 		}
 
 		msg := message.New(false)
+
 		for _, task := range tasks {
 			switch topic := task.Topic.(type) {
 			case topicHave:
-				msg.AddHave(cid.Cid(topic))
+				have, err := provider.blockManager.Has(context.Background(), cid.Cid(topic))
+				if err != nil {
+					logger.Errorf("Block load error: %s", err.Error())
+					msg.AddDontHave(cid.Cid(topic))
+				} else if !have {
+					logger.Debugf("Had a block but lost it for want_have: %s", cid.Cid(topic))
+					msg.AddDontHave(cid.Cid(topic))
+				} else {
+					logger.Debugf("Sending want_have to peer: %s", cid.Cid(topic))
+					msg.AddHave(cid.Cid(topic))
+				}
 			case topicDontHave:
 				msg.AddDontHave(cid.Cid(topic))
 			case topicBlock:
-				msg.AddBlock(blocks.Block(topic))
+				blk, err := provider.blockManager.Get(context.Background(), cid.Cid(topic))
+				if err != nil {
+					logger.Debugf("Had a block but lost it for want_block: %s (%s)", cid.Cid(topic), err.Error())
+					msg.AddDontHave(cid.Cid(topic))
+				} else {
+					logger.Debugf("Sending want_block to peer: %s", cid.Cid(topic))
+					msg.AddBlock(blk)
+				}
 			}
 		}
 		msg.SetPendingBytes(int32(pending))
@@ -291,13 +315,13 @@ func (provider *Provider) runWorker() {
 }
 
 // Adds a BLOCK task to the task queue
-func (provider *Provider) queueBlock(ctx context.Context, sender peer.ID, entry message.Entry, block blocks.Block) {
+func (provider *Provider) queueBlock(ctx context.Context, sender peer.ID, entry message.Entry, size int) {
 	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "BLOCK"))
 
 	provider.taskQueue.PushTasks(sender, peertask.Task{
-		Topic:    topicBlock(block),
+		Topic:    topicBlock(entry.Cid),
 		Priority: int(entry.Priority),
-		Work:     len(block.RawData()),
+		Work:     size,
 	})
 
 	// Record response metric
@@ -319,11 +343,11 @@ func (provider *Provider) queueDontHave(ctx context.Context, sender peer.ID, ent
 }
 
 // Adds a HAVE task to the task queue
-func (provider *Provider) queueHave(ctx context.Context, sender peer.ID, entry message.Entry, haveCid cid.Cid) {
+func (provider *Provider) queueHave(ctx context.Context, sender peer.ID, entry message.Entry) {
 	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "HAVE"))
 
 	provider.taskQueue.PushTasks(sender, peertask.Task{
-		Topic:    topicHave(haveCid),
+		Topic:    topicHave(entry.Cid),
 		Priority: int(entry.Priority),
 		Work:     message.BlockPresenceSize(entry.Cid),
 	})

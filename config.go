@@ -8,12 +8,12 @@ import (
 	"time"
 
 	"github.com/application-research/autoretrieve/bitswap"
-	"github.com/application-research/autoretrieve/filecoin"
-	"github.com/application-research/filclient"
+	mpg "github.com/application-research/autoretrieve/minerpeergetter"
 	"github.com/dustin/go-humanize"
 	"github.com/filecoin-project/go-address"
+	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
 	"github.com/ipfs/go-cid"
-	peer "github.com/libp2p/go-libp2p-core/peer"
+	peer "github.com/libp2p/go-libp2p/core/peer"
 	"gopkg.in/yaml.v3"
 )
 
@@ -109,12 +109,12 @@ func NewConfigStorageProviderPeer(peer peer.ID) ConfigStorageProvider {
 	}
 }
 
-func (provider *ConfigStorageProvider) GetPeerID(ctx context.Context, fc *filclient.FilClient) (peer.ID, error) {
+func (provider *ConfigStorageProvider) GetPeerID(ctx context.Context, minerPeerGetter *mpg.MinerPeerGetter) (peer.ID, error) {
 	if provider.maybeAddr == address.Undef {
 		return provider.maybePeer, nil
 	}
 
-	peer, err := fc.MinerPeer(ctx, provider.maybeAddr)
+	peer, err := minerPeerGetter.MinerPeer(ctx, provider.maybeAddr)
 	if err != nil {
 		return "", fmt.Errorf("could not get peer id from address %s: %w", provider.maybeAddr, err)
 	}
@@ -184,31 +184,31 @@ type Config struct {
 }
 
 // Extract relevant config points into a filecoin retriever config
-func (cfg *Config) ExtractFilecoinRetrieverConfig(ctx context.Context, fc *filclient.FilClient) (filecoin.RetrieverConfig, error) {
-	convertedMinerCfgs := make(map[peer.ID]filecoin.MinerConfig)
+func (cfg *Config) ExtractFilecoinRetrieverConfig(ctx context.Context, minerPeerGetter *mpg.MinerPeerGetter) (lassieretriever.RetrieverConfig, error) {
+	convertedMinerCfgs := make(map[peer.ID]lassieretriever.MinerConfig)
 	for provider, minerCfg := range cfg.MinerConfigs {
-		peer, err := provider.GetPeerID(ctx, fc)
+		peer, err := provider.GetPeerID(ctx, minerPeerGetter)
 		if err != nil {
-			return filecoin.RetrieverConfig{}, err
+			return lassieretriever.RetrieverConfig{}, err
 		}
 
-		convertedMinerCfgs[peer] = filecoin.MinerConfig(minerCfg)
+		convertedMinerCfgs[peer] = lassieretriever.MinerConfig(minerCfg)
 	}
 
-	blacklist, err := configStorageProviderListToPeerMap(ctx, fc, cfg.MinerBlacklist)
+	blacklist, err := configStorageProviderListToPeerMap(ctx, minerPeerGetter, cfg.MinerBlacklist)
 	if err != nil {
-		return filecoin.RetrieverConfig{}, err
+		return lassieretriever.RetrieverConfig{}, err
 	}
 
-	whitelist, err := configStorageProviderListToPeerMap(ctx, fc, cfg.MinerWhitelist)
+	whitelist, err := configStorageProviderListToPeerMap(ctx, minerPeerGetter, cfg.MinerWhitelist)
 	if err != nil {
-		return filecoin.RetrieverConfig{}, err
+		return lassieretriever.RetrieverConfig{}, err
 	}
 
-	return filecoin.RetrieverConfig{
+	return lassieretriever.RetrieverConfig{
 		MinerBlacklist:     blacklist,
 		MinerWhitelist:     whitelist,
-		DefaultMinerConfig: filecoin.MinerConfig(cfg.DefaultMinerConfig),
+		DefaultMinerConfig: lassieretriever.MinerConfig(cfg.DefaultMinerConfig),
 		MinerConfigs:       convertedMinerCfgs,
 		PaidRetrievals:     cfg.PaidRetrievals,
 	}, nil
@@ -282,10 +282,10 @@ func cidListToMap(ctx context.Context, cidList []cid.Cid) map[cid.Cid]bool {
 	return cidMap
 }
 
-func configStorageProviderListToPeerMap(ctx context.Context, fc *filclient.FilClient, minerList []ConfigStorageProvider) (map[peer.ID]bool, error) {
+func configStorageProviderListToPeerMap(ctx context.Context, minerPeerGetter *mpg.MinerPeerGetter, minerList []ConfigStorageProvider) (map[peer.ID]bool, error) {
 	peerMap := make(map[peer.ID]bool, len(minerList))
 	for _, provider := range minerList {
-		peer, err := provider.GetPeerID(ctx, fc)
+		peer, err := provider.GetPeerID(ctx, minerPeerGetter)
 		if err != nil {
 			return nil, err
 		}

@@ -20,15 +20,16 @@ func TestPutBlock(t *testing.T) {
 	manager := NewManager(bs, 0)
 	blockGenerator := blocksutil.NewBlockGenerator()
 	blk := blockGenerator.Next()
-	receivedBlk := make(chan cid.Cid)
+	receivedBlk := make(chan Block)
 	errChan := make(chan error, 1)
 	go func() {
-		err := manager.GetAwait(ctx, blk.Cid(), func(blk Block) {
-			receivedBlk <- blk.Cid()
+		manager.AwaitBlock(ctx, blk.Cid(), func(blk Block, err error) {
+			if err != nil {
+				errChan <- err
+			} else {
+				receivedBlk <- blk
+			}
 		})
-		if err != nil {
-			errChan <- err
-		}
 	}()
 	err := manager.Put(ctx, blk)
 	if err != nil {
@@ -39,9 +40,13 @@ func TestPutBlock(t *testing.T) {
 		t.Fatal("not enough succcesful blocks fetched")
 	case err := <-errChan:
 		t.Fatalf("received error getting block: %s", err)
-	case <-receivedBlk:
+	case received := <-receivedBlk:
+		if received.Cid != blk.Cid() && received.Size != len(blk.RawData()) {
+			t.Fatalf("received block bit with incorrect parameters")
+		}
 	}
 }
+
 func TestPutMany(t *testing.T) {
 	ctx := context.Background()
 	ds := sync.MutexWrap(datastore.NewMapDatastore())
@@ -56,12 +61,13 @@ func TestPutMany(t *testing.T) {
 	errChan := make(chan error, 20)
 	go func() {
 		for _, blk := range blks {
-			err := manager.GetAwait(ctx, blk.Cid(), func(blk Block) {
-				receivedBlocks <- blk.Cid()
+			manager.AwaitBlock(ctx, blk.Cid(), func(blk Block, err error) {
+				if err != nil {
+					errChan <- err
+				} else {
+					receivedBlocks <- blk.Cid
+				}
 			})
-			if err != nil {
-				errChan <- err
-			}
 		}
 	}()
 	err := manager.PutMany(ctx, blks)
@@ -90,7 +96,11 @@ func TestCleanup(t *testing.T) {
 	gen := blocksutil.NewBlockGenerator()
 	for i := 0; i < testCount; i++ {
 		cid := gen.Next().Cid()
-		manager.GetAwait(ctx, cid, func(b blocks.Block) { t.Fatalf("This should not happen") })
+		manager.AwaitBlock(ctx, cid, func(b Block, err error) {
+			if err != ErrWaitTimeout {
+				t.Fatalf("This should not happen")
+			}
+		})
 	}
 
 	// manager.waitListLk.Lock()

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dustin/go-humanize"
+	blocks "github.com/ipfs/go-block-format"
 	"github.com/ipfs/go-cid"
 	flatfs "github.com/ipfs/go-ds-flatfs"
 	blockstore "github.com/ipfs/go-ipfs-blockstore"
@@ -118,7 +119,7 @@ func (pruner *RandomPruner) DeleteBlock(ctx context.Context, cid cid.Cid) error 
 	return nil
 }
 
-func (pruner *RandomPruner) Put(ctx context.Context, block Block) error {
+func (pruner *RandomPruner) Put(ctx context.Context, block blocks.Block) error {
 	pruner.updatePin(block.Cid())
 	pruner.Poll(ctx)
 	if err := pruner.Blockstore.Put(ctx, block); err != nil {
@@ -130,7 +131,7 @@ func (pruner *RandomPruner) Put(ctx context.Context, block Block) error {
 	return nil
 }
 
-func (pruner *RandomPruner) PutMany(ctx context.Context, blocks []Block) error {
+func (pruner *RandomPruner) PutMany(ctx context.Context, blocks []blocks.Block) error {
 	blocksSize := 0
 	for _, block := range blocks {
 		pruner.updatePin(block.Cid())
@@ -289,9 +290,14 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 	return nil
 }
 
-func (pruner *RandomPruner) updatePin(cid cid.Cid) {
+func (pruner *RandomPruner) updatePin(pin cid.Cid) {
+	// clone the Cid to ensure we don't hang on to memory that may come from the network stack
+	// where the Cid was decoded as part of a larger message
+	emptyPinClone := make([]byte, 0, len(pin.Bytes()))
+	pinClone := append(emptyPinClone, pin.Bytes()...)
+	pin = cid.MustParse(pinClone)
 	pruner.pinsLk.Lock()
-	pruner.pins[cid] = time.Now()
+	pruner.pins[pin] = time.Now()
 	pruner.pinsLk.Unlock()
 }
 
@@ -299,6 +305,8 @@ func (pruner *RandomPruner) updatePin(cid cid.Cid) {
 func (pruner *RandomPruner) cleanPins(ctx context.Context) error {
 	pruner.pinsLk.Lock()
 	defer pruner.pinsLk.Unlock()
+
+	log.Debugf("Considering %d pins for possible clearing", len(pruner.pins))
 
 	now := time.Now()
 
