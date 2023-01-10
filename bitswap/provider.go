@@ -131,15 +131,15 @@ func NewProvider(
 
 	provider.network.Start(provider)
 
-	for i := 0; i < 8; i++ {
+	for i := 0; i < int(config.RequestWorkers); i++ {
 		go provider.handleRequests()
 	}
 
-	for i := 0; i < 8; i++ {
+	for i := 0; i < int(config.ResponseWorkers); i++ {
 		go provider.handleResponses()
 	}
 
-	for i := 0; i < 8; i++ {
+	for i := 0; i < int(config.RetrievalWorkers); i++ {
 		go provider.handleRetrievals()
 	}
 
