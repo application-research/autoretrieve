@@ -149,17 +149,6 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 		return nil, err
 	}
 
-	// Instantiate client
-	retrievalClient, err := lassieclient.NewClient(
-		blockstore,
-		datastore,
-		host,
-		payChanMgr,
-	)
-	if err != nil {
-		logger.Errorf("RetrievalClient initialization failed: %v", err)
-	}
-
 	minerPeerGetter := minerpeergetter.NewMinerPeerGetter(api)
 
 	// Initialize Filecoin retriever
@@ -184,6 +173,21 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 
 		confirmer := func(c cid.Cid) (bool, error) {
 			return blockManager.Has(cctx.Context, c)
+		}
+
+		// Instantiate client
+		retrievalClient, err := lassieclient.NewClient(
+			blockstore,
+			datastore,
+			host,
+			payChanMgr,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := retrievalClient.AwaitReady(); err != nil {
+			return nil, err
 		}
 
 		retriever, err = lassieretriever.NewRetriever(cctx.Context, retrieverCfg, retrievalClient, ep, confirmer)
