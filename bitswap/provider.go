@@ -13,6 +13,7 @@ import (
 	"github.com/ipfs/go-bitswap/network"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
+	format "github.com/ipfs/go-ipld-format"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-peertaskqueue"
 	"github.com/ipfs/go-peertaskqueue/peertask"
@@ -232,6 +233,8 @@ func (provider *Provider) handleRequest(
 			provider.queueSendBlock(peerID, int(entry.Priority), entry.Cid, size)
 			return nil
 		}
+	} else if !format.IsNotFound(err) {
+		log.Warnf("Failed to get block for %s: %v", entry.Cid, err)
 	}
 
 	// Otherwise, write to retrieve queue regardless of whether this is a want
