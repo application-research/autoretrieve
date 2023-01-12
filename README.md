@@ -1,8 +1,28 @@
 # Autoretrieve
 
-Autoretrieve is a standalone gateway server / Bitswap provider that bridges Filecoin Graphsync content over to Bitswap clients. 
+Autoretrieve is a standalone Graphsync-to-Bitswap proxy server, which allows IPFS clients to retrieve data which may be available on the Filecoin network but not on IPFS (such as data that has become unpinned, or data that was uploaded to a Filecoin storage provider but was never sent to an IPFS provider).
 
-When a Bitswap client requests data from Autoretrieve, Autoretrieve asks either Estuary or an STI indexer which Filecoin service providers are hosting it, starts a retrieval deal with a selected SP, and streams the incoming blocks to the Bitswap client.
+## What problem does Autoretrieve solve?
+
+Protocol Labs develops two decentralized data transfer protocols - Bitswap and GraphSync, which back the IPFS and Filecoin networks, respectively. Although built on similar principles, these networks are fundamentally incompatible and separate - a client of one network cannot retrieve data from a provider of the other. [TODO: link more info about differences.] This raises the following issue: what if there is data that exists on Filecoin, but not on IPFS?
+
+Autoretrieve is a "translational proxy" that allows data to be transferred from Filecoin to IPFS in an automated fashion. The existing alternatives for Autoretrieve's Filecoin-to-IPFS flow are the Boost IPFS node that providers may optionally enable, and manual transfer.
+
+[Boost IPFS node](https://github.com/filecoin-project/boost/issues/709) is not always a feasible option for several reasons:
+- Providers are not incentivized to enable this feature
+- Only free retrievals are supported
+
+In comparison, Autoretrieve:
+- Is a dedicated node, and operational burden/cost does not fall on storage provider operators
+- Supports paid retrievals (the Autoretrieve node operator covers the payment)
+
+## How does Autoretrieve work?
+
+Autoretrieve is at its core a Bitswap server. When a Bitswap request comes in, Autoretrieve queries an indexer for Filecoin storage providers that have the requested CID. The providers are sorted and retrieval is attempted sequentially until a successful retrieval is opened. As the GraphSync data lands into Autoretrieve from the storage provider, the data is streamed live back to the IPFS client.
+
+In order for IPFS clients to be able to retrieve Filecoin data using Autoretrieve, they must be connected to Autoretrieve. Currently, Autoretrieve can be advertised to the indexer (and by extension the DHT) by Estuary. Autoretrieve does not currently have an independent way to advertise its own data.
+
+If an Autoretrieve node is not advertised, clients may still download data from it if a connection is established either manually, or by chance while walking through the DHT searching for other providers.
 
 ## Usage
 
@@ -67,30 +87,4 @@ miner-configs:
     max-concurrent-retrievals: 2
   f05678:
     max-concurrent-retrievals: 10
-```
-
-## Help
-```console
-$ autoretrieve --help
-NAME:
-   autoretrieve - A new cli application
-
-USAGE:
-   autoretrieve [global options] command [command options] [arguments...]
-
-COMMANDS:
-   gen-config    Generate a new config with default values
-   print-config  Print detected config values as autoretrieve sees them
-   check-cid     Takes a CID argument and tries walking the DAG using the local blockstore
-   help, h       Shows a list of commands or help for one command
-
-GLOBAL OPTIONS:
-   --data-dir value               [$AUTORETRIEVE_DATA_DIR]
-   --lookup-endpoint-url value   Indexer or Estuary endpoint to get retrieval candidates from [$AUTORETRIEVE_LOOKUP_ENDPOINT_URL]
-   --lookup-endpoint-type value  Type of endpoint for finding data (valid values are "estuary" and "indexer") [$AUTORETRIEVE_LOOKUP_ENDPOINT_TYPE]
-   --disable-retrieval           Whether to disable the retriever module, for testing provider only (default: false) [$AUTORETRIEVE_DISABLE_RETRIEVAL]
-   --routing-table-type value    [dht|fullrt|disabled] [$AUTORETRIEVE_ROUTING_TABLE_TYPE]
-   --log-resource-manager        Whether to present output about the current state of the libp2p resource manager (default: false) [$AUTORETRIEVE_LOG_RESOURCE_MANAGER]
-   --log-retrievals              Whether to present periodic output about the progress of retrievals (default: false) [$AUTORETRIEVE_LOG_RETRIEVALS]
-   --help, -h                    show help (default: false)
 ```

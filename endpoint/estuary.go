@@ -9,7 +9,7 @@ import (
 	"net/url"
 	"path"
 
-	"github.com/application-research/filclient"
+	"github.com/application-research/autoretrieve/minerpeergetter"
 	"github.com/filecoin-project/go-address"
 	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
 	"github.com/ipfs/go-cid"
@@ -23,7 +23,7 @@ var (
 
 type EstuaryEndpoint struct {
 	url string
-	fc  *filclient.FilClient
+	mpg *minerpeergetter.MinerPeerGetter
 }
 
 type retrievalCandidate struct {
@@ -32,10 +32,10 @@ type retrievalCandidate struct {
 	DealID  uint
 }
 
-func NewEstuaryEndpoint(fc *filclient.FilClient, url string) *EstuaryEndpoint {
+func NewEstuaryEndpoint(url string, mpg *minerpeergetter.MinerPeerGetter) *EstuaryEndpoint {
 	return &EstuaryEndpoint{
 		url: url,
-		fc:  fc,
+		mpg: mpg,
 	}
 }
 
@@ -65,7 +65,7 @@ func (ee *EstuaryEndpoint) FindCandidates(ctx context.Context, cid cid.Cid) ([]l
 
 	converted := make([]lassieretriever.RetrievalCandidate, 0, len(unfiltered))
 	for _, original := range unfiltered {
-		minerPeer, err := ee.fc.MinerPeer(ctx, original.Miner)
+		minerPeer, err := ee.mpg.MinerPeer(ctx, original.Miner)
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to get miner peer: %v", ErrEndpointRequestFailed, err)
 		}
