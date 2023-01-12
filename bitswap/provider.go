@@ -359,6 +359,10 @@ func (provider *Provider) handleRetrievals() {
 			} else {
 				log.Infof("Started retrieval for %s", cid)
 			}
+
+			// TODO: if retriever.Request() is changed to be blocking, make
+			// blockManager.AwaitBlock() cancellable and cancel it after the
+			// request finishes if there's an error
 			provider.blockManager.AwaitBlock(ctx, cid, func(block blocks.Block, err error) {
 				if err != nil {
 					log.Debugf("Async block load failed: %s", err)
