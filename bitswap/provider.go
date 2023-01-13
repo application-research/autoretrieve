@@ -242,6 +242,7 @@ func (provider *Provider) handleRequest(
 
 	if provider.retriever == nil {
 		provider.queueSendDontHave(peerID, int(entry.Priority), entry.Cid, "disabled_retriever")
+		return nil
 	}
 
 	stats.Record(ctx, metrics.BitswapRetrieverRequestCount.M(1))
