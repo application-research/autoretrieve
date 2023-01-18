@@ -40,6 +40,7 @@ ifeq ($(os_uname),Darwin)
 endif
 ifeq ($(os_uname),Linux)
 	# assumes an APT based Linux
+	sudo apt-get update
 	sudo apt-get install ocl-icd-opencl-dev libhwloc-dev -y
 endif
 

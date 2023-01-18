@@ -7,7 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -273,7 +273,7 @@ func sendEstuaryHeartbeat(cfg *Config) (time.Duration, error) {
 
 	// If we got a non-success status code, warn about the error
 	if res.StatusCode/100 != 2 {
-		resBytes, err := ioutil.ReadAll(res.Body)
+		resBytes, err := io.ReadAll(res.Body)
 		resString := string(resBytes)
 
 		if err != nil {
