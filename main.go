@@ -176,6 +176,7 @@ func cmd(ctx *cli.Context) error {
 
 	autoretrieve, err := New(ctx, dataDirPath(ctx), cfg)
 	if err != nil {
+		logger.Errorf("Error starting autoretrieve: %s", err.Error())
 		return err
 	}
 

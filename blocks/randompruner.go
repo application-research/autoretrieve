@@ -149,7 +149,6 @@ func (pruner *RandomPruner) PutMany(ctx context.Context, blocks []blocks.Block) 
 
 // Checks remaining blockstore capacity and prunes if maximum capacity is hit
 func (pruner *RandomPruner) Poll(ctx context.Context) {
-	pruner.cleanPins(ctx)
 
 	if time.Since(pruner.lastSizeUpdate) > time.Minute {
 		size, err := pruner.datastore.DiskUsage(ctx)
@@ -301,28 +300,6 @@ func (pruner *RandomPruner) updatePin(pin cid.Cid) {
 	pruner.pinsLk.Unlock()
 }
 
-// Remove pins that have passed the pin duration
-func (pruner *RandomPruner) cleanPins(ctx context.Context) error {
-	pruner.pinsLk.Lock()
-	defer pruner.pinsLk.Unlock()
-
-	log.Debugf("Considering %d pins for possible clearing", len(pruner.pins))
-
-	now := time.Now()
-
-	for cid, lastUse := range pruner.pins {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-
-		if now.Sub(lastUse) > pruner.pinDuration {
-			delete(pruner.pins, cid)
-		}
-	}
-
-	return nil
-}
-
 func (pruner *RandomPruner) isPinned(cid cid.Cid) bool {
 	pruner.pinsLk.Lock()
 	defer pruner.pinsLk.Unlock()
@@ -332,5 +309,11 @@ func (pruner *RandomPruner) isPinned(cid cid.Cid) bool {
 		return false
 	}
 
-	return time.Since(lastUse) < pruner.pinDuration
+	if time.Since(lastUse) < pruner.pinDuration {
+		return true
+	}
+
+	delete(pruner.pins, cid)
+	return false
+
 }
