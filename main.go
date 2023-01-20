@@ -52,7 +52,9 @@ func init() {
 }
 
 func main() {
-	log.SetLogLevel("autoretrieve", "DEBUG")
+	if _, ok := log.GetConfig().SubsystemLevels["autoretrieve"]; !ok {
+		log.SetLogLevel("autoretrieve", "DEBUG")
+	}
 
 	app := cli.NewApp()
 

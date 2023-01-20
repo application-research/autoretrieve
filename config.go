@@ -165,7 +165,9 @@ type Config struct {
 	AdvertiseToken           string                   `yaml:"advertise-token"`
 	LookupEndpointType       EndpointType             `yaml:"lookup-endpoint-type"`
 	LookupEndpointURL        string                   `yaml:"lookup-endpoint-url"`
-	MaxBitswapWorkers        uint                     `yaml:"max-bitswap-workers"`
+	RequestWorkers           uint                     `yaml:"request-workers"`
+	ResponseWorkers          uint                     `yaml:"response-workers"`
+	RetrievalWorkers         uint                     `yaml:"retrieval-workers"`
 	RoutingTableType         bitswap.RoutingTableType `yaml:"routing-table-type"`
 	PruneThreshold           ConfigByteCount          `yaml:"prune-threshold"`
 	PinDuration              time.Duration            `yaml:"pin-duration"`
@@ -217,9 +219,11 @@ func (cfg *Config) ExtractFilecoinRetrieverConfig(ctx context.Context, minerPeer
 // Extract relevant config points into a bitswap provider config
 func (cfg *Config) ExtractBitswapProviderConfig(ctx context.Context) bitswap.ProviderConfig {
 	return bitswap.ProviderConfig{
-		CidBlacklist:      cidListToMap(ctx, cfg.CidBlacklist),
-		MaxBitswapWorkers: cfg.MaxBitswapWorkers,
-		RoutingTableType:  cfg.RoutingTableType,
+		CidBlacklist:     cidListToMap(ctx, cfg.CidBlacklist),
+		RequestWorkers:   cfg.RequestWorkers,
+		ResponseWorkers:  cfg.ResponseWorkers,
+		RetrievalWorkers: cfg.RetrievalWorkers,
+		RoutingTableType: cfg.RoutingTableType,
 	}
 }
 
@@ -243,7 +247,9 @@ func DefaultConfig() Config {
 		InstanceId:         "autoretrieve-unnamed",
 		LookupEndpointType: EndpointTypeIndexer,
 		LookupEndpointURL:  "https://cid.contact",
-		MaxBitswapWorkers:  1,
+		RequestWorkers:     8,
+		ResponseWorkers:    8,
+		RetrievalWorkers:   8,
 		RoutingTableType:   bitswap.RoutingTableTypeDHT,
 		PruneThreshold:     0,
 		PinDuration:        1 * time.Hour,

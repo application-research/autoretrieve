@@ -13,8 +13,8 @@ import (
 	"github.com/ipfs/go-bitswap/network"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
-	ipld "github.com/ipfs/go-ipld-format"
-	"github.com/ipfs/go-log/v2"
+	format "github.com/ipfs/go-ipld-format"
+	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-peertaskqueue"
 	"github.com/ipfs/go-peertaskqueue/peertask"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -26,7 +26,7 @@ import (
 	"go.opencensus.io/tag"
 )
 
-var logger = log.Logger("autoretrieve")
+var log = logging.Logger("provider")
 
 // Wantlist want type redeclarations
 const (
@@ -34,19 +34,29 @@ const (
 	wantTypeBlock = bitswap_message_pb.Message_Wantlist_Block
 )
 
-// Task queue topics
-type (
-	topicHave     cid.Cid
-	topicDontHave cid.Cid
-	topicBlock    cid.Cid
+// Response queue actions
+type ResponseAction uint
+
+type ResponseData struct {
+	action ResponseAction
+	reason string
+}
+
+const (
+	actionSendHave ResponseAction = iota
+	actionSendDontHave
+	actionSendBlock
 )
 
 const targetMessageSize = 1 << 10
+const sendBlockThreshold = 2 << 10
 
 type ProviderConfig struct {
-	CidBlacklist      map[cid.Cid]bool
-	MaxBitswapWorkers uint
-	RoutingTableType  RoutingTableType
+	CidBlacklist     map[cid.Cid]bool
+	RequestWorkers   uint
+	ResponseWorkers  uint
+	RetrievalWorkers uint
+	RoutingTableType RoutingTableType
 }
 
 type Provider struct {
@@ -54,8 +64,25 @@ type Provider struct {
 	network      network.BitSwapNetwork
 	blockManager *blocks.Manager
 	retriever    *lassieretriever.Retriever
-	taskQueue    *peertaskqueue.PeerTaskQueue
-	workReady    chan struct{}
+
+	// Incoming messages to be processed - work is 1 per message
+	requestQueue *peertaskqueue.PeerTaskQueue
+
+	// Outgoing messages to be sent - work is size of messages in bytes
+	responseQueue *peertaskqueue.PeerTaskQueue
+
+	// CIDs that need to be retrieved - work is 1 per CID queued
+	retrievalQueue *peertaskqueue.PeerTaskQueue
+}
+
+type overwriteTaskMerger struct{}
+
+func (*overwriteTaskMerger) HasNewInfo(task peertask.Task, existing []*peertask.Task) bool {
+	return true
+}
+
+func (*overwriteTaskMerger) Merge(task peertask.Task, existing *peertask.Task) {
+	*existing = task
 }
 
 func NewProvider(
@@ -94,264 +121,312 @@ func NewProvider(
 	}
 
 	provider := &Provider{
-		config:       config,
-		network:      network.NewFromIpfsHost(host, routing),
-		blockManager: blockManager,
-		retriever:    retriever,
-		taskQueue:    peertaskqueue.New(),
-		workReady:    make(chan struct{}, config.MaxBitswapWorkers),
+		config:         config,
+		network:        network.NewFromIpfsHost(host, routing),
+		blockManager:   blockManager,
+		retriever:      retriever,
+		requestQueue:   peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{})),
+		responseQueue:  peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{})),
+		retrievalQueue: peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{})),
 	}
 
 	provider.network.Start(provider)
 
-	for i := uint(0); i < config.MaxBitswapWorkers; i++ {
-		go provider.runWorker()
+	for i := 0; i < int(config.RequestWorkers); i++ {
+		go provider.handleRequests()
+	}
+
+	for i := 0; i < int(config.ResponseWorkers); i++ {
+		go provider.handleResponses()
+	}
+
+	for i := 0; i < int(config.RetrievalWorkers); i++ {
+		go provider.handleRetrievals()
 	}
 
 	return provider, nil
 }
 
-// Upon receiving a message, provider will iterate over the requested CIDs. For
-// each CID, it'll check if it's present in the blockstore. If it is, it will
-// respond with that block, and if it isn't, it'll start a retrieval and
-// register the block to be sent later.
 func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, incoming message.BitSwapMessage) {
+	var tasks []peertask.Task
 	for _, entry := range incoming.Wantlist() {
-
-		// Immediately, if this is a cancel message, just ignore it (TODO)
-		if entry.Cancel {
-			continue
-		}
-
-		stats.Record(ctx, metrics.BitswapRequestCount.M(1))
-
-		// We want to skip CIDs in the blacklist, queue DONT_HAVE
-		if provider.config.CidBlacklist[entry.Cid] {
-			logger.Debugf("Replying DONT_HAVE for blacklisted CID: %s", entry.Cid)
-			provider.queueDontHave(ctx, sender, entry, "blacklisted_cid")
-			continue
-		}
-
-		switch entry.WantType {
-		case wantTypeHave:
-			// For WANT_HAVE, just confirm whether it's in the blockstore
-			has, err := provider.blockManager.Has(ctx, entry.Cid)
-
-			// If there was a problem, log and move on
-			if err != nil {
-				logger.Warnf("Failed to check blockstore for bitswap entry: %s", entry.Cid)
-				continue
-			}
-
-			// If the block was found, queue HAVE and move on...
-			if has {
-				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
-				provider.queueHave(ctx, sender, entry)
-				continue
-			}
-
-			// ...otherwise, check retrieval candidates for it
-		case wantTypeBlock:
-			// For WANT_BLOCK, try to get the block
-			size, err := provider.blockManager.GetSize(ctx, entry.Cid)
-
-			// If there was a problem (aside from block not found), log and move
-			// on
-			if err != nil && !ipld.IsNotFound(err) {
-				logger.Warnf("Failed to get block for bitswap entry: %s", entry.Cid)
-				continue
-			}
-
-			// As long as no not found error was hit, queue the block and move
-			// on...
-			if !ipld.IsNotFound(err) {
-				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
-				provider.queueBlock(ctx, sender, entry, size)
-				continue
-			}
-
-			// ...otherwise, check retrieval candidates for it
-		}
-
-		// If retriever is disabled, nothing we can do, send DONT_HAVE and move
-		// on
-		if provider.retriever == nil {
-			provider.queueDontHave(ctx, sender, entry, "disabled_retriever")
-			continue
-		}
-
-		// At this point, the blockstore did not have the requested block, so a
-		// retrieval is attempted
-
-		// Record that a retrieval is required
-		stats.Record(ctx, metrics.BitswapRetrieverRequestCount.M(1))
-
-		switch entry.WantType {
-		case wantTypeHave:
-			// TODO: for WANT_HAVE, just check if there's a candidate, we
-			// probably don't have to actually do the retrieval yet
-			if err := provider.retriever.Request(entry.Cid); err != nil {
-				// If no candidates were found, there's nothing that can be done, so
-				// queue DONT_HAVE and move on
-				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
-
-				if !errors.Is(err, lassieretriever.ErrNoCandidates) {
-					logger.Warnf("Could not get candidates: %s", err.Error())
-				}
-
-				continue
-			}
-
-			provider.blockManager.AwaitBlock(ctx, entry.Cid, func(_ blocks.Block, err error) {
-				if err != nil {
-					logger.Debugf("Failed to load block: %s", err.Error())
-					provider.queueDontHave(ctx, sender, entry, "failed_block_load")
-				} else {
-					logger.Debugf("Successfully awaited block (want_have): %s", entry.Cid)
-					provider.queueHave(context.Background(), sender, entry)
-				}
-				provider.signalWork()
-			})
-		case wantTypeBlock:
-			if err := provider.retriever.Request(entry.Cid); err != nil {
-				// If no candidates were found, there's nothing that can be done, so
-				// queue DONT_HAVE and move on
-				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
-
-				if !errors.Is(err, lassieretriever.ErrNoCandidates) {
-					logger.Warnf("Could not get candidates: %s", err.Error())
-				}
-
-				continue
-			}
-
-			provider.blockManager.AwaitBlock(ctx, entry.Cid, func(block blocks.Block, err error) {
-				if err != nil {
-					logger.Debugf("Failed to load block: %s", err.Error())
-					provider.queueDontHave(ctx, sender, entry, "failed_block_load")
-				} else {
-					logger.Debugf("Successfully awaited block (want_block): %s", entry.Cid)
-					provider.queueBlock(context.Background(), sender, entry, block.Size)
-				}
-				provider.signalWork()
-			})
-		}
+		tasks = append(tasks, peertask.Task{
+			Topic:    entry.Cid,
+			Priority: int(entry.Priority),
+			Work:     1,
+			Data:     entry,
+		})
 	}
-
-	provider.signalWork()
+	provider.requestQueue.PushTasks(sender, tasks...)
 }
 
-func (provider *Provider) ReceiveError(err error) {
-	logger.Errorf("Error receiving bitswap message: %s", err.Error())
-}
+func (provider *Provider) handleRequests() {
+	ctx := context.Background()
 
-func (provider *Provider) PeerConnected(peer peer.ID) {}
-
-func (provider *Provider) PeerDisconnected(peer peer.ID) {}
-
-func (provider *Provider) signalWork() {
-	// Request work if any worker isn't running or do nothing otherwise
-	select {
-	case provider.workReady <- struct{}{}:
-	default:
-	}
-}
-
-func (provider *Provider) runWorker() {
 	for {
-		peer, tasks, pending := provider.taskQueue.PopTasks(targetMessageSize)
-
-		// If there's nothing to do, wait for something to happen
+		peerID, tasks, _ := provider.requestQueue.PopTasks(100)
 		if len(tasks) == 0 {
-			select {
-			case _, ok := <-provider.workReady:
-				// If the workReady channel closed, stop the worker
-				if !ok {
-					logger.Infof("Shutting down worker")
-					return
-				}
-			case <-time.After(250 * time.Millisecond):
-			}
+			time.Sleep(time.Millisecond * 250)
 			continue
 		}
+
+		log.Debugf("Processing %d requests for %s", len(tasks), peerID)
+
+		for _, task := range tasks {
+			entry, ok := task.Data.(message.Entry)
+			if !ok {
+				log.Warnf("Invalid request entry data")
+				continue
+			}
+
+			provider.handleRequest(ctx, peerID, entry)
+		}
+
+		provider.requestQueue.TasksDone(peerID, tasks...)
+	}
+}
+
+func (provider *Provider) handleRequest(
+	ctx context.Context,
+	peerID peer.ID,
+	entry message.Entry,
+) error {
+	log := log.With("peer_id", peerID)
+
+	// Skip blacklisted CIDs
+	if provider.config.CidBlacklist[entry.Cid] {
+		log.Debugf("Replying DONT_HAVE for blacklisted CID: %s", entry.Cid)
+		provider.queueSendDontHave(peerID, int(entry.Priority), entry.Cid, "blacklisted_cid")
+		return nil
+	}
+
+	// If it's a cancel, just remove from the queue and finish
+
+	if entry.Cancel {
+		log.Debugf("Cancelling request for %s", entry.Cid)
+		provider.responseQueue.Remove(entry.Cid, peerID)
+		provider.retrievalQueue.Remove(entry.Cid, peerID)
+		return nil
+	}
+
+	stats.Record(ctx, metrics.BitswapRequestCount.M(1))
+
+	// First check blockstore, immediately write to response queue if it
+	// exists
+
+	size, err := provider.blockManager.GetSize(ctx, entry.Cid)
+	if err == nil {
+		stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
+
+		switch entry.WantType {
+		case wantTypeHave:
+			if size < sendBlockThreshold {
+				log.Debugf("Want have for %s (under send block threshold)", entry.Cid)
+				provider.queueSendBlock(peerID, int(entry.Priority), entry.Cid, size)
+			} else {
+				log.Debugf("Want have for %s", entry.Cid)
+				provider.queueSendHave(peerID, int(entry.Priority), entry.Cid)
+			}
+			return nil
+		case wantTypeBlock:
+			log.Debugf("Want block for %s", entry.Cid)
+			provider.queueSendBlock(peerID, int(entry.Priority), entry.Cid, size)
+			return nil
+		}
+	} else if !format.IsNotFound(err) {
+		log.Warnf("Failed to get block for %s: %v", entry.Cid, err)
+	}
+
+	// Otherwise, write to retrieve queue regardless of whether this is a want
+	// have or want block (unless retrieval is disabled)
+
+	if provider.retriever == nil {
+		provider.queueSendDontHave(peerID, int(entry.Priority), entry.Cid, "disabled_retriever")
+		return nil
+	}
+
+	stats.Record(ctx, metrics.BitswapRetrieverRequestCount.M(1))
+
+	provider.retrievalQueue.PushTasks(peerID, peertask.Task{
+		Topic:    entry.Cid,
+		Priority: int(entry.Priority),
+		Work:     1,
+	})
+
+	return nil
+}
+
+func (provider *Provider) handleResponses() {
+	ctx := context.Background()
+
+	for {
+		peerID, tasks, _ := provider.responseQueue.PopTasks(targetMessageSize)
+		if len(tasks) == 0 {
+			time.Sleep(time.Millisecond * 250)
+			continue
+		}
+
+		log.Debugf("Responding to %d requests for %s", len(tasks), peerID)
 
 		msg := message.New(false)
 
 		for _, task := range tasks {
-			switch topic := task.Topic.(type) {
-			case topicHave:
-				have, err := provider.blockManager.Has(context.Background(), cid.Cid(topic))
+			cid, ok := task.Topic.(cid.Cid)
+			if !ok {
+				log.Warnf("Retrieval topic wasn't a CID")
+				continue
+			}
+
+			log.Debugf("Sending response for %s", cid)
+
+			data, ok := task.Data.(ResponseData)
+			if !ok {
+				log.Warnf("Response task data was not a response action")
+				continue
+			}
+
+			switch data.action {
+			case actionSendHave:
+				msg.AddHave(cid)
+				log.Debugf("Sending have for %s", cid)
+
+				// Response metric
+				ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "HAVE"))
+				stats.Record(ctx, metrics.BitswapResponseCount.M(1))
+			case actionSendDontHave:
+				msg.AddDontHave(cid)
+				log.Debugf("Sending dont have for %s", cid)
+
+				// Response metric
+				ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "DONT_HAVE"), tag.Insert(metrics.BitswapDontHaveReason, data.reason))
+				stats.Record(ctx, metrics.BitswapResponseCount.M(1))
+			case actionSendBlock:
+				block, err := provider.blockManager.Get(ctx, cid)
 				if err != nil {
-					logger.Errorf("Block load error: %s", err.Error())
-					msg.AddDontHave(cid.Cid(topic))
-				} else if !have {
-					logger.Debugf("Had a block but lost it for want_have: %s", cid.Cid(topic))
-					msg.AddDontHave(cid.Cid(topic))
-				} else {
-					logger.Debugf("Sending want_have to peer: %s", cid.Cid(topic))
-					msg.AddHave(cid.Cid(topic))
+					log.Warnf("Attempted to send a block but it is not in the blockstore")
+					continue
 				}
-			case topicDontHave:
-				msg.AddDontHave(cid.Cid(topic))
-			case topicBlock:
-				blk, err := provider.blockManager.Get(context.Background(), cid.Cid(topic))
-				if err != nil {
-					logger.Debugf("Had a block but lost it for want_block: %s (%s)", cid.Cid(topic), err.Error())
-					msg.AddDontHave(cid.Cid(topic))
-				} else {
-					logger.Debugf("Sending want_block to peer: %s", cid.Cid(topic))
-					msg.AddBlock(blk)
-				}
+				msg.AddBlock(block)
+				log.Debugf("Sending block for %s", cid)
+
+				// Response metric
+				ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "BLOCK"))
+				stats.Record(ctx, metrics.BitswapResponseCount.M(1))
 			}
 		}
-		msg.SetPendingBytes(int32(pending))
 
-		if err := provider.network.SendMessage(context.Background(), peer, msg); err != nil {
-			logger.Errorf("Failed to send message %#v: %s", msg, err.Error())
+		if err := provider.network.SendMessage(ctx, peerID, msg); err != nil {
+			log.Warnf("Failed to send message to %s: %v", peerID, err)
+			provider.responseQueue.TasksDone(peerID, tasks...)
 		}
 
-		provider.taskQueue.TasksDone(peer, tasks...)
+		provider.responseQueue.TasksDone(peerID, tasks...)
+		log.Debugf("Sent message to %s", peerID)
 	}
 }
 
-// Adds a BLOCK task to the task queue
-func (provider *Provider) queueBlock(ctx context.Context, sender peer.ID, entry message.Entry, size int) {
-	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "BLOCK"))
+func (provider *Provider) handleRetrievals() {
+	ctx := context.Background()
 
-	provider.taskQueue.PushTasks(sender, peertask.Task{
-		Topic:    topicBlock(entry.Cid),
-		Priority: int(entry.Priority),
+	for {
+		peerID, tasks, _ := provider.retrievalQueue.PopTasks(1)
+		if len(tasks) == 0 {
+			time.Sleep(time.Millisecond * 250)
+			continue
+		}
+
+		log.Debugf("Retrieval of %d CIDs queued for %s", len(tasks), peerID)
+
+		for _, task := range tasks {
+			cid, ok := task.Topic.(cid.Cid)
+			if !ok {
+				log.Warnf("Retrieval topic wasn't a CID")
+				continue
+			}
+
+			log.Debugf("Requesting retrieval for %s", cid)
+
+			// Try to start a new retrieval (if it's already running then no
+			// need to error, just continue on to await block)
+			if err := provider.retriever.Request(cid); err != nil {
+				if !errors.As(err, &lassieretriever.ErrRetrievalAlreadyRunning{}) {
+					if errors.Is(err, lassieretriever.ErrNoCandidates) {
+						// Just do a debug print if there were no candidates because this happens a lot
+						log.Debugf("No candidates for %s", cid)
+					} else {
+						// Otherwise, there was a real failure, print with more importance
+						log.Errorf("Request for %s failed: %v", cid, err)
+					}
+				} else {
+					log.Debugf("Retrieval already running for %s, no new one will be started", cid)
+				}
+			} else {
+				log.Infof("Started retrieval for %s", cid)
+			}
+
+			// TODO: if retriever.Request() is changed to be blocking, make
+			// blockManager.AwaitBlock() cancellable and cancel it after the
+			// request finishes if there's an error
+			provider.blockManager.AwaitBlock(ctx, cid, func(block blocks.Block, err error) {
+				if err != nil {
+					log.Debugf("Async block load failed: %s", err)
+					provider.queueSendDontHave(peerID, task.Priority, block.Cid, "failed_block_load")
+				} else {
+					log.Debugf("Async block load completed: %s", block.Cid)
+					provider.queueSendBlock(peerID, task.Priority, block.Cid, block.Size)
+				}
+			})
+		}
+
+		provider.retrievalQueue.TasksDone(peerID, tasks...)
+	}
+}
+
+func (provider *Provider) ReceiveError(err error) {
+	log.Errorf("Error receiving bitswap message: %s", err.Error())
+}
+
+func (provider *Provider) PeerConnected(peerID peer.ID) {
+	log.Debugf("Peer %s connected", peerID)
+}
+
+func (provider *Provider) PeerDisconnected(peerID peer.ID) {
+	log.Debugf("Peer %s disconnected", peerID)
+}
+
+func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Cid) {
+	log.Debugf("Sending HAVE for %s to %s", cid, peerID)
+	provider.responseQueue.PushTasks(peerID, peertask.Task{
+		Topic:    cid,
+		Priority: priority,
+		Work:     cid.ByteLen(),
+		Data: ResponseData{
+			action: actionSendHave,
+		},
+	})
+}
+
+func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid cid.Cid, reason string) {
+	log.Debugf("Sending DONT_HAVE for %s to %s", cid, peerID)
+	provider.responseQueue.PushTasks(peerID, peertask.Task{
+		Topic:    cid,
+		Priority: priority,
+		Work:     cid.ByteLen(),
+		Data: ResponseData{
+			action: actionSendDontHave,
+			reason: reason,
+		},
+	})
+}
+
+func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.Cid, size int) {
+	log.Debugf("Sending HAVE for %s to %s", cid, peerID)
+	provider.responseQueue.PushTasks(peerID, peertask.Task{
+		Topic:    cid,
+		Priority: priority,
 		Work:     size,
+		Data: ResponseData{
+			action: actionSendBlock, // TODO: maybe check retrieval task for this
+		},
 	})
-
-	// Record response metric
-	stats.Record(ctx, metrics.BitswapResponseCount.M(1))
-}
-
-// Adds a DONT_HAVE task to the task queue
-func (provider *Provider) queueDontHave(ctx context.Context, sender peer.ID, entry message.Entry, reason string) {
-	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "DONT_HAVE"), tag.Insert(metrics.BitswapDontHaveReason, reason))
-
-	provider.taskQueue.PushTasks(sender, peertask.Task{
-		Topic:    topicDontHave(entry.Cid),
-		Priority: int(entry.Priority),
-		Work:     message.BlockPresenceSize(entry.Cid),
-	})
-
-	// Record response metric
-	stats.Record(ctx, metrics.BitswapResponseCount.M(1))
-}
-
-// Adds a HAVE task to the task queue
-func (provider *Provider) queueHave(ctx context.Context, sender peer.ID, entry message.Entry) {
-	ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "HAVE"))
-
-	provider.taskQueue.PushTasks(sender, peertask.Task{
-		Topic:    topicHave(entry.Cid),
-		Priority: int(entry.Priority),
-		Work:     message.BlockPresenceSize(entry.Cid),
-	})
-
-	// Record response metric
-	stats.Record(ctx, metrics.BitswapResponseCount.M(1))
 }
