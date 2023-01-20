@@ -43,9 +43,9 @@ type ResponseData struct {
 }
 
 const (
-	sendHave ResponseAction = iota
-	sendDontHave
-	sendBlock
+	actionSendHave ResponseAction = iota
+	actionSendDontHave
+	actionSendBlock
 )
 
 const targetMessageSize = 1 << 10
@@ -286,21 +286,21 @@ func (provider *Provider) handleResponses() {
 			}
 
 			switch data.action {
-			case sendHave:
+			case actionSendHave:
 				msg.AddHave(cid)
 				log.Debugf("Sending have for %s", cid)
 
 				// Response metric
 				ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "HAVE"))
 				stats.Record(ctx, metrics.BitswapResponseCount.M(1))
-			case sendDontHave:
+			case actionSendDontHave:
 				msg.AddDontHave(cid)
 				log.Debugf("Sending dont have for %s", cid)
 
 				// Response metric
 				ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "DONT_HAVE"), tag.Insert(metrics.BitswapDontHaveReason, data.reason))
 				stats.Record(ctx, metrics.BitswapResponseCount.M(1))
-			case sendBlock:
+			case actionSendBlock:
 				block, err := provider.blockManager.Get(ctx, cid)
 				if err != nil {
 					log.Warnf("Attempted to send a block but it is not in the blockstore")
@@ -401,7 +401,7 @@ func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Ci
 		Priority: priority,
 		Work:     cid.ByteLen(),
 		Data: ResponseData{
-			action: sendHave,
+			action: actionSendHave,
 		},
 	})
 }
@@ -413,7 +413,7 @@ func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid ci
 		Priority: priority,
 		Work:     cid.ByteLen(),
 		Data: ResponseData{
-			action: sendDontHave,
+			action: actionSendDontHave,
 			reason: reason,
 		},
 	})
@@ -426,7 +426,7 @@ func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.C
 		Priority: priority,
 		Work:     size,
 		Data: ResponseData{
-			action: sendBlock, // TODO: maybe check retrieval task for this
+			action: actionSendBlock, // TODO: maybe check retrieval task for this
 		},
 	})
 }
