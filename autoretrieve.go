@@ -24,12 +24,12 @@ import (
 	"github.com/application-research/autoretrieve/paychannelmanager"
 	lassieclient "github.com/filecoin-project/lassie/pkg/client"
 	lassieeventrecorder "github.com/filecoin-project/lassie/pkg/eventrecorder"
+	"github.com/filecoin-project/lassie/pkg/indexerlookup"
 	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
 	rpcstmgr "github.com/filecoin-project/lotus/chain/stmgr/rpc"
 	"github.com/filecoin-project/lotus/chain/wallet"
 	lcli "github.com/filecoin-project/lotus/cli"
 	"github.com/filecoin-project/lotus/paychmgr"
-	"github.com/ipfs/go-cid"
 	ipfsdatastore "github.com/ipfs/go-datastore"
 	"github.com/ipfs/go-datastore/namespace"
 	flatfs "github.com/ipfs/go-ds-flatfs"
@@ -154,25 +154,21 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 	// Initialize Filecoin retriever
 	var retriever *lassieretriever.Retriever
 	if !cfg.DisableRetrieval {
-		var ep lassieretriever.Endpoint
+		var candidateFinder lassieretriever.CandidateFinder
 		switch cfg.LookupEndpointType {
 		case EndpointTypeEstuary:
-			logger.Infof("Using Estuary endpoint type")
-			ep = endpoint.NewEstuaryEndpoint(cfg.LookupEndpointURL, minerPeerGetter)
+			logger.Infof("Using Estuary candidate finder type")
+			candidateFinder = endpoint.NewEstuaryEndpoint(cfg.LookupEndpointURL, minerPeerGetter)
 		case EndpointTypeIndexer:
-			logger.Infof("Using indexer endpoint type")
-			ep = endpoint.NewIndexerEndpoint(cfg.LookupEndpointURL)
+			logger.Infof("Using indexer candidate finder type")
+			candidateFinder = indexerlookup.NewCandidateFinder(cfg.LookupEndpointURL)
 		default:
-			return nil, errors.New("unrecognized endpoint type")
+			return nil, errors.New("unrecognized candidate finder type")
 		}
 
 		retrieverCfg, err := cfg.ExtractFilecoinRetrieverConfig(cctx.Context, minerPeerGetter)
 		if err != nil {
 			return nil, err
-		}
-
-		confirmer := func(c cid.Cid) (bool, error) {
-			return blockManager.Has(cctx.Context, c)
 		}
 
 		// Instantiate client
@@ -190,17 +186,19 @@ func New(cctx *cli.Context, dataDir string, cfg Config) (*Autoretrieve, error) {
 			return nil, err
 		}
 
-		retriever, err = lassieretriever.NewRetriever(cctx.Context, retrieverCfg, retrievalClient, ep, confirmer)
+		retriever, err = lassieretriever.NewRetriever(cctx.Context, retrieverCfg, retrievalClient, candidateFinder)
 		if err != nil {
 			return nil, err
 		}
+		<-retriever.Start()
 		if cfg.EventRecorderEndpointURL != "" {
 			logger.Infof("Reporting retrieval events to %v", cfg.EventRecorderEndpointURL)
 			eventRecorderEndpointAuthorization, err := loadEventRecorderAuth(dataDirPath(cctx))
 			if err != nil {
 				return nil, err
 			}
-			retriever.RegisterListener(lassieeventrecorder.NewEventRecorder(cctx.Context, cfg.InstanceId, cfg.EventRecorderEndpointURL, eventRecorderEndpointAuthorization))
+			eventRecorder := lassieeventrecorder.NewEventRecorder(cctx.Context, cfg.InstanceId, cfg.EventRecorderEndpointURL, eventRecorderEndpointAuthorization)
+			retriever.RegisterSubscriber(eventRecorder.RecordEvent)
 		}
 	}
 
