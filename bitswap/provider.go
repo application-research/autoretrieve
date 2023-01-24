@@ -125,9 +125,9 @@ func NewProvider(
 		network:        network.NewFromIpfsHost(host, routing),
 		blockManager:   blockManager,
 		retriever:      retriever,
-		requestQueue:   peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{})),
-		responseQueue:  peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{})),
-		retrievalQueue: peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{})),
+		requestQueue:   peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
+		responseQueue:  peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
+		retrievalQueue: peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
 	}
 
 	provider.network.Start(provider)
