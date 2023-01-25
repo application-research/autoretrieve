@@ -33,6 +33,7 @@ type Manager struct {
 }
 
 type waitListEntry struct {
+	ctx          context.Context
 	callback     func(Block, error)
 	registeredAt time.Time
 }
@@ -55,7 +56,13 @@ func NewManager(inner blockstore.Blockstore, getAwaitTimeout time.Duration) *Man
 	return mgr
 }
 
-func (mgr *Manager) AwaitBlock(ctx context.Context, cid cid.Cid, callback func(Block, error)) {
+// AwaitBlock will wait for a block to be added to the blockstore and then
+// call the callback with the block. If the block is already in the blockstore,
+// the callback will be called immediately. If the block is not in the blockstore
+// or the context is cancelled, the callback will not be called.
+// Returns true if the block was already in the blockstore, allowing the
+// callback to be called, or false otherwise.
+func (mgr *Manager) AwaitBlock(ctx context.Context, cid cid.Cid, callback func(Block, error)) bool {
 	// We need to lock the blockstore here to make sure the requested block
 	// doesn't get added while being added to the waitlist
 	mgr.waitListLk.Lock()
@@ -68,22 +75,25 @@ func (mgr *Manager) AwaitBlock(ctx context.Context, cid cid.Cid, callback func(B
 		if !ipld.IsNotFound(err) {
 			mgr.waitListLk.Unlock()
 			callback(Block{}, err)
-			return
+			return false
 		}
 
 		mgr.waitList[cid] = append(mgr.waitList[cid], waitListEntry{
+			ctx:          ctx,
 			callback:     callback,
 			registeredAt: time.Now(),
 		})
 
 		mgr.waitListLk.Unlock()
-		return
+		return false
 	}
 
 	mgr.waitListLk.Unlock()
 
-	// Otherwise, we can immediately run the callback
+	// Otherwise, we can immediately run the callback and notify the caller of
+	// success
 	callback(Block{cid, size}, nil)
+	return true
 }
 
 func (mgr *Manager) Put(ctx context.Context, block blocks.Block) error {
@@ -149,20 +159,22 @@ func (mgr *Manager) startPollCleanup() {
 		for cid := range mgr.waitList {
 			// For each element in the slice for this CID...
 			for i := 0; i < len(mgr.waitList[cid]); i++ {
-				// ...check if it's timed out...
-				if time.Since(mgr.waitList[cid][i].registeredAt) > mgr.getAwaitTimeout {
+				// ...check whether the waiter context was cancelled or it's been in the
+				// list too long...
+				if mgr.waitList[cid][i].ctx.Err() != nil || time.Since(mgr.waitList[cid][i].registeredAt) > mgr.getAwaitTimeout {
 					// ...and if so, delete this element by replacing it with
 					// the last element of the slice and shrinking the length by
-					// 1, and step the index back
-					mgr.waitList[cid][i].callback(Block{}, ErrWaitTimeout)
+					// 1, and step the index back.
+					if mgr.waitList[cid][i].ctx.Err() == nil {
+						mgr.waitList[cid][i].callback(Block{}, ErrWaitTimeout)
+					}
 					mgr.waitList[cid][i] = mgr.waitList[cid][len(mgr.waitList[cid])-1]
 					mgr.waitList[cid] = mgr.waitList[cid][:len(mgr.waitList[cid])-1]
 					i--
 				}
 			}
 
-			// If the slice is empty now, remove it entirely from the waitList
-			// map
+			// If the slice is empty now, remove it entirely from the waitList map
 			if len(mgr.waitList[cid]) == 0 {
 				delete(mgr.waitList, cid)
 			}

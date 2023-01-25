@@ -7,7 +7,9 @@ import (
 
 	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/metrics"
+	"github.com/dustin/go-humanize"
 	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
+	"github.com/filecoin-project/lassie/pkg/types"
 	"github.com/ipfs/go-bitswap/message"
 	bitswap_message_pb "github.com/ipfs/go-bitswap/message/pb"
 	"github.com/ipfs/go-bitswap/network"
@@ -66,13 +68,16 @@ type Provider struct {
 	retriever    *lassieretriever.Retriever
 
 	// Incoming messages to be processed - work is 1 per message
-	requestQueue *peertaskqueue.PeerTaskQueue
+	requestQueue           *peertaskqueue.PeerTaskQueue
+	requestQueueSignalChan chan struct{}
 
 	// Outgoing messages to be sent - work is size of messages in bytes
-	responseQueue *peertaskqueue.PeerTaskQueue
+	responseQueue           *peertaskqueue.PeerTaskQueue
+	responseQueueSignalChan chan struct{}
 
 	// CIDs that need to be retrieved - work is 1 per CID queued
-	retrievalQueue *peertaskqueue.PeerTaskQueue
+	retrievalQueue           *peertaskqueue.PeerTaskQueue
+	retrievalQueueSignalChan chan struct{}
 }
 
 type overwriteTaskMerger struct{}
@@ -121,27 +126,30 @@ func NewProvider(
 	}
 
 	provider := &Provider{
-		config:         config,
-		network:        network.NewFromIpfsHost(host, routing),
-		blockManager:   blockManager,
-		retriever:      retriever,
-		requestQueue:   peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
-		responseQueue:  peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
-		retrievalQueue: peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
+		config:                   config,
+		network:                  network.NewFromIpfsHost(host, routing),
+		blockManager:             blockManager,
+		retriever:                retriever,
+		requestQueue:             peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
+		requestQueueSignalChan:   make(chan struct{}, 10),
+		responseQueue:            peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
+		responseQueueSignalChan:  make(chan struct{}, 10),
+		retrievalQueue:           peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
+		retrievalQueueSignalChan: make(chan struct{}, 10),
 	}
 
 	provider.network.Start(provider)
 
 	for i := 0; i < int(config.RequestWorkers); i++ {
-		go provider.handleRequests()
+		go provider.handleRequests(ctx)
 	}
 
 	for i := 0; i < int(config.ResponseWorkers); i++ {
-		go provider.handleResponses()
+		go provider.handleResponses(ctx)
 	}
 
 	for i := 0; i < int(config.RetrievalWorkers); i++ {
-		go provider.handleRetrievals()
+		go provider.handleRetrievals(ctx)
 	}
 
 	return provider, nil
@@ -158,15 +166,18 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 		})
 	}
 	provider.requestQueue.PushTasks(sender, tasks...)
+	provider.requestQueueSignalChan <- struct{}{}
 }
 
-func (provider *Provider) handleRequests() {
-	ctx := context.Background()
-
-	for {
+func (provider *Provider) handleRequests(ctx context.Context) {
+	for ctx.Err() == nil {
 		peerID, tasks, _ := provider.requestQueue.PopTasks(100)
 		if len(tasks) == 0 {
-			time.Sleep(time.Millisecond * 250)
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Millisecond * 250):
+			case <-provider.requestQueueSignalChan:
+			}
 			continue
 		}
 
@@ -252,17 +263,20 @@ func (provider *Provider) handleRequest(
 		Priority: int(entry.Priority),
 		Work:     1,
 	})
+	provider.retrievalQueueSignalChan <- struct{}{}
 
 	return nil
 }
 
-func (provider *Provider) handleResponses() {
-	ctx := context.Background()
-
-	for {
+func (provider *Provider) handleResponses(ctx context.Context) {
+	for ctx.Err() == nil {
 		peerID, tasks, _ := provider.responseQueue.PopTasks(targetMessageSize)
 		if len(tasks) == 0 {
-			time.Sleep(time.Millisecond * 250)
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Millisecond * 250):
+			case <-provider.responseQueueSignalChan:
+			}
 			continue
 		}
 
@@ -291,15 +305,15 @@ func (provider *Provider) handleResponses() {
 				log.Debugf("Sending have for %s", cid)
 
 				// Response metric
-				ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "HAVE"))
-				stats.Record(ctx, metrics.BitswapResponseCount.M(1))
+				taggedCtx, _ := tag.New(ctx, tag.Insert(metrics.BitswapTopic, "HAVE"))
+				stats.Record(taggedCtx, metrics.BitswapResponseCount.M(1))
 			case actionSendDontHave:
 				msg.AddDontHave(cid)
 				log.Debugf("Sending dont have for %s", cid)
 
 				// Response metric
-				ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "DONT_HAVE"), tag.Insert(metrics.BitswapDontHaveReason, data.reason))
-				stats.Record(ctx, metrics.BitswapResponseCount.M(1))
+				taggedCtx, _ := tag.New(ctx, tag.Insert(metrics.BitswapTopic, "DONT_HAVE"), tag.Insert(metrics.BitswapDontHaveReason, data.reason))
+				stats.Record(taggedCtx, metrics.BitswapResponseCount.M(1))
 			case actionSendBlock:
 				block, err := provider.blockManager.Get(ctx, cid)
 				if err != nil {
@@ -310,8 +324,8 @@ func (provider *Provider) handleResponses() {
 				log.Debugf("Sending block for %s", cid)
 
 				// Response metric
-				ctx, _ = tag.New(ctx, tag.Insert(metrics.BitswapTopic, "BLOCK"))
-				stats.Record(ctx, metrics.BitswapResponseCount.M(1))
+				taggedCtx, _ := tag.New(ctx, tag.Insert(metrics.BitswapTopic, "BLOCK"))
+				stats.Record(taggedCtx, metrics.BitswapResponseCount.M(1))
 			}
 		}
 
@@ -325,13 +339,15 @@ func (provider *Provider) handleResponses() {
 	}
 }
 
-func (provider *Provider) handleRetrievals() {
-	ctx := context.Background()
-
-	for {
+func (provider *Provider) handleRetrievals(ctx context.Context) {
+	for ctx.Err() == nil {
 		peerID, tasks, _ := provider.retrievalQueue.PopTasks(1)
 		if len(tasks) == 0 {
-			time.Sleep(time.Millisecond * 250)
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Millisecond * 250):
+			case <-provider.retrievalQueueSignalChan:
+			}
 			continue
 		}
 
@@ -344,38 +360,52 @@ func (provider *Provider) handleRetrievals() {
 				continue
 			}
 
-			log.Debugf("Requesting retrieval for %s", cid)
+			retrievalId, err := types.NewRetrievalID()
+			if err != nil {
+				log.Errorf("Failed to create retrieval ID: %s", err.Error())
+			}
+
+			log.Debugf("Starting retrieval for %s (%s)", cid, retrievalId)
+
+			// Start a background blockstore fetch with a callback to send the block
+			// to the peer once it's available.
+			blockCtx, blockCancel := context.WithCancel(ctx)
+			if provider.blockManager.AwaitBlock(blockCtx, cid, func(block blocks.Block, err error) {
+				if err != nil {
+					log.Debugf("Async block load failed: %s", err)
+					provider.queueSendDontHave(peerID, task.Priority, cid, "failed_block_load")
+				} else {
+					log.Debugf("Async block load completed: %s", cid)
+					provider.queueSendBlock(peerID, task.Priority, cid, block.Size)
+				}
+				blockCancel()
+			}) {
+				// If the block was already in the blockstore then we don't need to
+				// start a retrieval.
+				continue
+			}
 
 			// Try to start a new retrieval (if it's already running then no
 			// need to error, just continue on to await block)
-			if err := provider.retriever.Request(cid); err != nil {
-				if !errors.As(err, &lassieretriever.ErrRetrievalAlreadyRunning{}) {
-					if errors.Is(err, lassieretriever.ErrNoCandidates) {
-						// Just do a debug print if there were no candidates because this happens a lot
-						log.Debugf("No candidates for %s", cid)
-					} else {
-						// Otherwise, there was a real failure, print with more importance
-						log.Errorf("Request for %s failed: %v", cid, err)
-					}
-				} else {
+			result, err := provider.retriever.Retrieve(ctx, retrievalId, cid)
+			if err != nil {
+				if errors.Is(err, lassieretriever.ErrRetrievalAlreadyRunning) {
 					log.Debugf("Retrieval already running for %s, no new one will be started", cid)
+					continue // Don't send dont_have or run blockCancel(), let it async load
+				} else if errors.Is(err, lassieretriever.ErrNoCandidates) {
+					// Just do a debug print if there were no candidates because this happens a lot
+					log.Debugf("No candidates for %s (%s)", cid, retrievalId)
+					provider.queueSendDontHave(peerID, task.Priority, cid, "no_candidates")
+				} else {
+					// Otherwise, there was a real failure, print with more importance
+					log.Errorf("Retrieval for %s (%s) failed: %v", cid, retrievalId, err)
+					provider.queueSendDontHave(peerID, task.Priority, cid, "retrieval_failed")
 				}
 			} else {
-				log.Infof("Started retrieval for %s", cid)
+				log.Infof("Retrieval for %s (%s) completed (duration: %s, bytes: %s, blocks: %d)", cid, retrievalId, result.Duration, humanize.IBytes(result.Size), result.Blocks)
 			}
 
-			// TODO: if retriever.Request() is changed to be blocking, make
-			// blockManager.AwaitBlock() cancellable and cancel it after the
-			// request finishes if there's an error
-			provider.blockManager.AwaitBlock(ctx, cid, func(block blocks.Block, err error) {
-				if err != nil {
-					log.Debugf("Async block load failed: %s", err)
-					provider.queueSendDontHave(peerID, task.Priority, block.Cid, "failed_block_load")
-				} else {
-					log.Debugf("Async block load completed: %s", block.Cid)
-					provider.queueSendBlock(peerID, task.Priority, block.Cid, block.Size)
-				}
-			})
+			blockCancel()
 		}
 
 		provider.retrievalQueue.TasksDone(peerID, tasks...)
@@ -387,11 +417,11 @@ func (provider *Provider) ReceiveError(err error) {
 }
 
 func (provider *Provider) PeerConnected(peerID peer.ID) {
-	log.Debugf("Peer %s connected", peerID)
+	// TODO: too noisy: log.Debugf("Peer %s connected", peerID)
 }
 
 func (provider *Provider) PeerDisconnected(peerID peer.ID) {
-	log.Debugf("Peer %s disconnected", peerID)
+	// TODO: too noisy: log.Debugf("Peer %s disconnected", peerID)
 }
 
 func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Cid) {
@@ -404,6 +434,7 @@ func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Ci
 			action: actionSendHave,
 		},
 	})
+	provider.responseQueueSignalChan <- struct{}{}
 }
 
 func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid cid.Cid, reason string) {
@@ -417,6 +448,7 @@ func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid ci
 			reason: reason,
 		},
 	})
+	provider.responseQueueSignalChan <- struct{}{}
 }
 
 func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.Cid, size int) {
@@ -429,4 +461,5 @@ func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.C
 			action: actionSendBlock, // TODO: maybe check retrieval task for this
 		},
 	})
+	provider.responseQueueSignalChan <- struct{}{}
 }
