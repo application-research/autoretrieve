@@ -353,12 +353,17 @@ func (provider *Provider) handleRetrievals() {
 					if errors.Is(err, lassieretriever.ErrNoCandidates) {
 						// Just do a debug print if there were no candidates because this happens a lot
 						log.Debugf("No candidates for %s", cid)
+						provider.queueSendDontHave(peerID, task.Priority, cid, "not_available")
+						continue
 					} else {
 						// Otherwise, there was a real failure, print with more importance
 						log.Errorf("Request for %s failed: %v", cid, err)
+						provider.queueSendDontHave(peerID, task.Priority, cid, "not_available")
+						continue
 					}
 				} else {
 					log.Debugf("Retrieval already running for %s, no new one will be started", cid)
+					// let AwaitBlock do its job to get this block
 				}
 			} else {
 				log.Infof("Started retrieval for %s", cid)
