@@ -68,13 +68,16 @@ type Provider struct {
 	retriever    *lassieretriever.Retriever
 
 	// Incoming messages to be processed - work is 1 per message
-	requestQueue *peertaskqueue.PeerTaskQueue
+	requestQueue           *peertaskqueue.PeerTaskQueue
+	requestQueueSignalChan chan struct{}
 
 	// Outgoing messages to be sent - work is size of messages in bytes
-	responseQueue *peertaskqueue.PeerTaskQueue
+	responseQueue           *peertaskqueue.PeerTaskQueue
+	responseQueueSignalChan chan struct{}
 
 	// CIDs that need to be retrieved - work is 1 per CID queued
-	retrievalQueue *peertaskqueue.PeerTaskQueue
+	retrievalQueue           *peertaskqueue.PeerTaskQueue
+	retrievalQueueSignalChan chan struct{}
 }
 
 type overwriteTaskMerger struct{}
@@ -123,13 +126,16 @@ func NewProvider(
 	}
 
 	provider := &Provider{
-		config:         config,
-		network:        network.NewFromIpfsHost(host, routing),
-		blockManager:   blockManager,
-		retriever:      retriever,
-		requestQueue:   peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
-		responseQueue:  peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
-		retrievalQueue: peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
+		config:                   config,
+		network:                  network.NewFromIpfsHost(host, routing),
+		blockManager:             blockManager,
+		retriever:                retriever,
+		requestQueue:             peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
+		requestQueueSignalChan:   make(chan struct{}, 10),
+		responseQueue:            peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
+		responseQueueSignalChan:  make(chan struct{}, 10),
+		retrievalQueue:           peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
+		retrievalQueueSignalChan: make(chan struct{}, 10),
 	}
 
 	provider.network.Start(provider)
@@ -160,13 +166,18 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 		})
 	}
 	provider.requestQueue.PushTasks(sender, tasks...)
+	provider.requestQueueSignalChan <- struct{}{}
 }
 
 func (provider *Provider) handleRequests(ctx context.Context) {
 	for ctx.Err() == nil {
 		peerID, tasks, _ := provider.requestQueue.PopTasks(100)
 		if len(tasks) == 0 {
-			time.Sleep(time.Millisecond * 250)
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Millisecond * 250):
+			case <-provider.requestQueueSignalChan:
+			}
 			continue
 		}
 
@@ -252,6 +263,7 @@ func (provider *Provider) handleRequest(
 		Priority: int(entry.Priority),
 		Work:     1,
 	})
+	provider.retrievalQueueSignalChan <- struct{}{}
 
 	return nil
 }
@@ -260,7 +272,11 @@ func (provider *Provider) handleResponses(ctx context.Context) {
 	for ctx.Err() == nil {
 		peerID, tasks, _ := provider.responseQueue.PopTasks(targetMessageSize)
 		if len(tasks) == 0 {
-			time.Sleep(time.Millisecond * 250)
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Millisecond * 250):
+			case <-provider.responseQueueSignalChan:
+			}
 			continue
 		}
 
@@ -327,7 +343,11 @@ func (provider *Provider) handleRetrievals(ctx context.Context) {
 	for ctx.Err() == nil {
 		peerID, tasks, _ := provider.retrievalQueue.PopTasks(1)
 		if len(tasks) == 0 {
-			time.Sleep(time.Millisecond * 250)
+			select {
+			case <-ctx.Done():
+			case <-time.After(time.Millisecond * 250):
+			case <-provider.retrievalQueueSignalChan:
+			}
 			continue
 		}
 
@@ -397,11 +417,11 @@ func (provider *Provider) ReceiveError(err error) {
 }
 
 func (provider *Provider) PeerConnected(peerID peer.ID) {
-	log.Debugf("Peer %s connected", peerID)
+	// TODO: too noisy: log.Debugf("Peer %s connected", peerID)
 }
 
 func (provider *Provider) PeerDisconnected(peerID peer.ID) {
-	log.Debugf("Peer %s disconnected", peerID)
+	// TODO: too noisy: log.Debugf("Peer %s disconnected", peerID)
 }
 
 func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Cid) {
@@ -414,6 +434,7 @@ func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Ci
 			action: actionSendHave,
 		},
 	})
+	provider.responseQueueSignalChan <- struct{}{}
 }
 
 func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid cid.Cid, reason string) {
@@ -427,6 +448,7 @@ func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid ci
 			reason: reason,
 		},
 	})
+	provider.responseQueueSignalChan <- struct{}{}
 }
 
 func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.Cid, size int) {
@@ -439,4 +461,5 @@ func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.C
 			action: actionSendBlock, // TODO: maybe check retrieval task for this
 		},
 	})
+	provider.responseQueueSignalChan <- struct{}{}
 }
