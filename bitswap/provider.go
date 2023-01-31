@@ -131,11 +131,11 @@ func NewProvider(
 		blockManager:             blockManager,
 		retriever:                retriever,
 		requestQueue:             peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
-		requestQueueSignalChan:   make(chan struct{}, 10),
+		requestQueueSignalChan:   make(chan struct{}, 1),
 		responseQueue:            peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
-		responseQueueSignalChan:  make(chan struct{}, 10),
+		responseQueueSignalChan:  make(chan struct{}, 1),
 		retrievalQueue:           peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
-		retrievalQueueSignalChan: make(chan struct{}, 10),
+		retrievalQueueSignalChan: make(chan struct{}, 1),
 	}
 
 	provider.network.Start(provider)
@@ -166,7 +166,11 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 		})
 	}
 	provider.requestQueue.PushTasks(sender, tasks...)
-	provider.requestQueueSignalChan <- struct{}{}
+
+	select {
+	case provider.requestQueueSignalChan <- struct{}{}:
+	default:
+	}
 }
 
 func (provider *Provider) handleRequests(ctx context.Context) {
@@ -264,7 +268,10 @@ func (provider *Provider) handleRequest(
 		Priority: int(entry.Priority),
 		Work:     1,
 	})
-	provider.retrievalQueueSignalChan <- struct{}{}
+	select {
+	case provider.retrievalQueueSignalChan <- struct{}{}:
+	default:
+	}
 
 	return nil
 }
@@ -437,7 +444,10 @@ func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Ci
 			action: actionSendHave,
 		},
 	})
-	provider.responseQueueSignalChan <- struct{}{}
+	select {
+	case provider.responseQueueSignalChan <- struct{}{}:
+	default:
+	}
 }
 
 func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid cid.Cid, reason string) {
@@ -452,7 +462,10 @@ func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid ci
 			reason: reason,
 		},
 	})
-	provider.responseQueueSignalChan <- struct{}{}
+	select {
+	case provider.responseQueueSignalChan <- struct{}{}:
+	default:
+	}
 }
 
 func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.Cid, size int) {
@@ -466,5 +479,8 @@ func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.C
 			action: actionSendBlock, // TODO: maybe check retrieval task for this
 		},
 	})
-	provider.responseQueueSignalChan <- struct{}{}
+	select {
+	case provider.responseQueueSignalChan <- struct{}{}:
+	default:
+	}
 }
