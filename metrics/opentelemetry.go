@@ -37,6 +37,11 @@ var (
 	QueryErrorDealNotFoundCount        = stats.Int64("query_error_dealstate", "The number of query failures cause the provider couldn't find the relevant deal", stats.UnitDimensionless)
 	QueryErrorOtherCount               = stats.Int64("query_error_error_other_total", "The number of retrieval errors with uncategorized causes", stats.UnitDimensionless)
 
+	// Provider Queues
+	RequestQueueSize   = stats.Int64("request_queue_size", "The number of items in the provider request queue", stats.UnitDimensionless)
+	RetrievalQueueSize = stats.Int64("retrieval_queue_size", "The number of items in the provider retrieval queue", stats.UnitDimensionless)
+	ResponseQueueSize  = stats.Int64("response_queue_size", "The number of items in the provider response queue", stats.UnitDimensionless)
+
 	// Indexer Candidates
 	IndexerCandidatesPerRequestCount          = stats.Int64("indexer_candidates_per_request_total", "The number of indexer candidates received per request", stats.UnitDimensionless)
 	RequestWithIndexerCandidatesCount         = stats.Int64("request_with_indexer_candidates_total", "The number of requests that result in non-zero candidates from the indexer", stats.UnitDimensionless)
