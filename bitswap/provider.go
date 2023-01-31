@@ -172,7 +172,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 	default:
 	}
 
-	stats.Record(ctx, metrics.RequestQueueSize.M(int64(1)))
+	stats.Record(ctx, metrics.RequestQueueSize.M(int64(len(tasks))))
 }
 
 func (provider *Provider) handleRequests(ctx context.Context) {
