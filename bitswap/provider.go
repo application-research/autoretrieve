@@ -360,55 +360,56 @@ func (provider *Provider) handleRetrievals(ctx context.Context) {
 				continue
 			}
 
-			retrievalId, err := types.NewRetrievalID()
-			if err != nil {
-				log.Errorf("Failed to create retrieval ID: %s", err.Error())
-			}
-
-			log.Debugf("Starting retrieval for %s (%s)", cid, retrievalId)
-
-			// Start a background blockstore fetch with a callback to send the block
-			// to the peer once it's available.
-			blockCtx, blockCancel := context.WithCancel(ctx)
-			if provider.blockManager.AwaitBlock(blockCtx, cid, func(block blocks.Block, err error) {
+			go func(task *peertask.Task) {
+				retrievalId, err := types.NewRetrievalID()
 				if err != nil {
-					log.Debugf("Async block load failed: %s", err)
-					provider.queueSendDontHave(peerID, task.Priority, cid, "failed_block_load")
-				} else {
-					log.Debugf("Async block load completed: %s", cid)
-					provider.queueSendBlock(peerID, task.Priority, cid, block.Size)
+					log.Errorf("Failed to create retrieval ID: %s", err.Error())
 				}
+
+				log.Debugf("Starting retrieval for %s (%s)", cid, retrievalId)
+
+				// Start a background blockstore fetch with a callback to send the block
+				// to the peer once it's available.
+				blockCtx, blockCancel := context.WithCancel(ctx)
+				if provider.blockManager.AwaitBlock(blockCtx, cid, func(block blocks.Block, err error) {
+					if err != nil {
+						log.Debugf("Async block load failed: %s", err)
+						provider.queueSendDontHave(peerID, task.Priority, cid, "failed_block_load")
+					} else {
+						log.Debugf("Async block load completed: %s", cid)
+						provider.queueSendBlock(peerID, task.Priority, cid, block.Size)
+					}
+					blockCancel()
+				}) {
+					// If the block was already in the blockstore then we don't need to
+					// start a retrieval.
+					return
+				}
+
+				// Try to start a new retrieval (if it's already running then no
+				// need to error, just continue on to await block)
+				result, err := provider.retriever.Retrieve(ctx, retrievalId, cid)
+				if err != nil {
+					if errors.Is(err, lassieretriever.ErrRetrievalAlreadyRunning) {
+						log.Debugf("Retrieval already running for %s, no new one will be started", cid)
+						return // Don't send dont_have or run blockCancel(), let it async load
+					} else if errors.Is(err, lassieretriever.ErrNoCandidates) {
+						// Just do a debug print if there were no candidates because this happens a lot
+						log.Debugf("No candidates for %s (%s)", cid, retrievalId)
+						provider.queueSendDontHave(peerID, task.Priority, cid, "no_candidates")
+					} else {
+						// Otherwise, there was a real failure, print with more importance
+						log.Errorf("Retrieval for %s (%s) failed: %v", cid, retrievalId, err)
+						provider.queueSendDontHave(peerID, task.Priority, cid, "retrieval_failed")
+					}
+				} else {
+					log.Infof("Retrieval for %s (%s) completed (duration: %s, bytes: %s, blocks: %d)", cid, retrievalId, result.Duration, humanize.IBytes(result.Size), result.Blocks)
+				}
+
 				blockCancel()
-			}) {
-				// If the block was already in the blockstore then we don't need to
-				// start a retrieval.
-				continue
-			}
-
-			// Try to start a new retrieval (if it's already running then no
-			// need to error, just continue on to await block)
-			result, err := provider.retriever.Retrieve(ctx, retrievalId, cid)
-			if err != nil {
-				if errors.Is(err, lassieretriever.ErrRetrievalAlreadyRunning) {
-					log.Debugf("Retrieval already running for %s, no new one will be started", cid)
-					continue // Don't send dont_have or run blockCancel(), let it async load
-				} else if errors.Is(err, lassieretriever.ErrNoCandidates) {
-					// Just do a debug print if there were no candidates because this happens a lot
-					log.Debugf("No candidates for %s (%s)", cid, retrievalId)
-					provider.queueSendDontHave(peerID, task.Priority, cid, "no_candidates")
-				} else {
-					// Otherwise, there was a real failure, print with more importance
-					log.Errorf("Retrieval for %s (%s) failed: %v", cid, retrievalId, err)
-					provider.queueSendDontHave(peerID, task.Priority, cid, "retrieval_failed")
-				}
-			} else {
-				log.Infof("Retrieval for %s (%s) completed (duration: %s, bytes: %s, blocks: %d)", cid, retrievalId, result.Duration, humanize.IBytes(result.Size), result.Blocks)
-			}
-
-			blockCancel()
+				provider.retrievalQueue.TasksDone(peerID, task)
+			}(task)
 		}
-
-		provider.retrievalQueue.TasksDone(peerID, tasks...)
 	}
 }
 
