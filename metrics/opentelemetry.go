@@ -249,15 +249,15 @@ var (
 	}
 	requestQueueView = &view.View{
 		Measure:     RequestQueueSize,
-		Aggregation: view.Sum(),
+		Aggregation: view.LastValue(),
 	}
 	retrievalQueueView = &view.View{
 		Measure:     RetrievalQueueSize,
-		Aggregation: view.Sum(),
+		Aggregation: view.LastValue(),
 	}
 	responseQueueView = &view.View{
 		Measure:     ResponseQueueSize,
-		Aggregation: view.Sum(),
+		Aggregation: view.LastValue(),
 	}
 )
 

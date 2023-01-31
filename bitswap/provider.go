@@ -172,7 +172,7 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 	default:
 	}
 
-	stats.Record(ctx, metrics.RequestQueueSize.M(int64(len(tasks))))
+	stats.Record(ctx, metrics.RequestQueueSize.M(int64(provider.requestQueue.Stats().NumPending)))
 }
 
 func (provider *Provider) handleRequests(ctx context.Context) {
@@ -186,7 +186,7 @@ func (provider *Provider) handleRequests(ctx context.Context) {
 			}
 			continue
 		}
-		stats.Record(ctx, metrics.RequestQueueSize.M(-int64(len(tasks))))
+		stats.Record(ctx, metrics.RequestQueueSize.M(int64(provider.requestQueue.Stats().NumPending)))
 
 		log := log.With("client", peerID)
 		log.Debugf("Processing %d requests", len(tasks))
@@ -276,7 +276,7 @@ func (provider *Provider) handleRequest(
 	default:
 	}
 
-	stats.Record(ctx, metrics.RetrievalQueueSize.M(int64(1)))
+	stats.Record(ctx, metrics.RetrievalQueueSize.M(int64(provider.retrievalQueue.Stats().NumPending)))
 
 	return nil
 }
@@ -292,7 +292,8 @@ func (provider *Provider) handleResponses(ctx context.Context) {
 			}
 			continue
 		}
-		stats.Record(ctx, metrics.ResponseQueueSize.M(-int64(len(tasks))))
+
+		stats.Record(ctx, metrics.ResponseQueueSize.M(int64(provider.responseQueue.Stats().NumPending)))
 
 		log := log.With("client", peerID)
 		log.Debugf("Responding to %d requests", len(tasks))
@@ -363,7 +364,8 @@ func (provider *Provider) handleRetrievals(ctx context.Context) {
 			}
 			continue
 		}
-		stats.Record(ctx, metrics.RetrievalQueueSize.M(-int64(len(tasks))))
+
+		stats.Record(ctx, metrics.RetrievalQueueSize.M(int64(provider.retrievalQueue.Stats().NumPending)))
 
 		log := log.With("client", peerID)
 		log.Debugf("Retrieval of %d CIDs queued for %s", len(tasks), peerID)
@@ -456,7 +458,7 @@ func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Ci
 	default:
 	}
 
-	stats.Record(context.Background(), metrics.ResponseQueueSize.M(int64(1)))
+	stats.Record(context.Background(), metrics.ResponseQueueSize.M(int64(provider.responseQueue.Stats().NumPending)))
 }
 
 func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid cid.Cid, reason string) {
@@ -476,7 +478,7 @@ func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid ci
 	default:
 	}
 
-	stats.Record(context.Background(), metrics.ResponseQueueSize.M(int64(1)))
+	stats.Record(context.Background(), metrics.ResponseQueueSize.M(int64(provider.responseQueue.Stats().NumPending)))
 }
 
 func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.Cid, size int) {
@@ -495,5 +497,5 @@ func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.C
 	default:
 	}
 
-	stats.Record(context.Background(), metrics.ResponseQueueSize.M(int64(1)))
+	stats.Record(context.Background(), metrics.ResponseQueueSize.M(int64(provider.responseQueue.Stats().NumPending)))
 }
