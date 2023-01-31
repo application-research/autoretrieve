@@ -171,6 +171,8 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 	case provider.requestQueueSignalChan <- struct{}{}:
 	default:
 	}
+
+	stats.Record(ctx, metrics.RequestQueueSize.M(int64(1)))
 }
 
 func (provider *Provider) handleRequests(ctx context.Context) {
@@ -199,6 +201,7 @@ func (provider *Provider) handleRequests(ctx context.Context) {
 		}
 
 		provider.requestQueue.TasksDone(peerID, tasks...)
+		stats.Record(ctx, metrics.RequestQueueSize.M(-int64(len(tasks))))
 	}
 }
 
@@ -273,6 +276,8 @@ func (provider *Provider) handleRequest(
 	default:
 	}
 
+	stats.Record(ctx, metrics.RetrievalQueueSize.M(int64(1)))
+
 	return nil
 }
 
@@ -342,6 +347,7 @@ func (provider *Provider) handleResponses(ctx context.Context) {
 		}
 
 		provider.responseQueue.TasksDone(peerID, tasks...)
+		stats.Record(ctx, metrics.ResponseQueueSize.M(-int64(len(tasks))))
 		log.Debugf("Successfully sent message")
 	}
 }
@@ -416,6 +422,7 @@ func (provider *Provider) handleRetrievals(ctx context.Context) {
 
 				blockCancel()
 				provider.retrievalQueue.TasksDone(peerID, task)
+				stats.Record(ctx, metrics.RetrievalQueueSize.M(-int64(1)))
 			}(task)
 		}
 	}
@@ -448,6 +455,8 @@ func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Ci
 	case provider.responseQueueSignalChan <- struct{}{}:
 	default:
 	}
+
+	stats.Record(context.Background(), metrics.ResponseQueueSize.M(int64(1)))
 }
 
 func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid cid.Cid, reason string) {
@@ -466,6 +475,8 @@ func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid ci
 	case provider.responseQueueSignalChan <- struct{}{}:
 	default:
 	}
+
+	stats.Record(context.Background(), metrics.ResponseQueueSize.M(int64(1)))
 }
 
 func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.Cid, size int) {
@@ -483,4 +494,6 @@ func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.C
 	case provider.responseQueueSignalChan <- struct{}{}:
 	default:
 	}
+
+	stats.Record(context.Background(), metrics.ResponseQueueSize.M(int64(1)))
 }
