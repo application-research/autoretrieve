@@ -181,7 +181,8 @@ func (provider *Provider) handleRequests(ctx context.Context) {
 			continue
 		}
 
-		log.Debugf("Processing %d requests for %s", len(tasks), peerID)
+		log := log.With("client", peerID)
+		log.Debugf("Processing %d requests", len(tasks))
 
 		for _, task := range tasks {
 			entry, ok := task.Data.(message.Entry)
@@ -202,7 +203,7 @@ func (provider *Provider) handleRequest(
 	peerID peer.ID,
 	entry message.Entry,
 ) error {
-	log := log.With("peer_id", peerID)
+	log := log.With("client", peerID)
 
 	// Skip blacklisted CIDs
 	if provider.config.CidBlacklist[entry.Cid] {
@@ -280,7 +281,8 @@ func (provider *Provider) handleResponses(ctx context.Context) {
 			continue
 		}
 
-		log.Debugf("Responding to %d requests for %s", len(tasks), peerID)
+		log := log.With("client", peerID)
+		log.Debugf("Responding to %d requests", len(tasks))
 
 		msg := message.New(false)
 
@@ -290,8 +292,6 @@ func (provider *Provider) handleResponses(ctx context.Context) {
 				log.Warnf("Retrieval topic wasn't a CID")
 				continue
 			}
-
-			log.Debugf("Sending response for %s", cid)
 
 			data, ok := task.Data.(ResponseData)
 			if !ok {
@@ -330,12 +330,12 @@ func (provider *Provider) handleResponses(ctx context.Context) {
 		}
 
 		if err := provider.network.SendMessage(ctx, peerID, msg); err != nil {
-			log.Warnf("Failed to send message to %s: %v", peerID, err)
+			log.Warnf("Failed to send message: %v", err)
 			provider.responseQueue.TasksDone(peerID, tasks...)
 		}
 
 		provider.responseQueue.TasksDone(peerID, tasks...)
-		log.Debugf("Sent message to %s", peerID)
+		log.Debugf("Successfully sent message")
 	}
 }
 
@@ -351,6 +351,7 @@ func (provider *Provider) handleRetrievals(ctx context.Context) {
 			continue
 		}
 
+		log := log.With("client", peerID)
 		log.Debugf("Retrieval of %d CIDs queued for %s", len(tasks), peerID)
 
 		for _, task := range tasks {
@@ -426,7 +427,8 @@ func (provider *Provider) PeerDisconnected(peerID peer.ID) {
 }
 
 func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Cid) {
-	log.Debugf("Sending HAVE for %s to %s", cid, peerID)
+	log := log.With("client", peerID)
+	log.Debugf("Sending HAVE for %s", cid)
 	provider.responseQueue.PushTasks(peerID, peertask.Task{
 		Topic:    cid,
 		Priority: priority,
@@ -439,7 +441,8 @@ func (provider *Provider) queueSendHave(peerID peer.ID, priority int, cid cid.Ci
 }
 
 func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid cid.Cid, reason string) {
-	log.Debugf("Sending DONT_HAVE for %s to %s", cid, peerID)
+	log := log.With("client", peerID)
+	log.Debugf("Sending DONT_HAVE for %s", cid)
 	provider.responseQueue.PushTasks(peerID, peertask.Task{
 		Topic:    cid,
 		Priority: priority,
@@ -453,7 +456,8 @@ func (provider *Provider) queueSendDontHave(peerID peer.ID, priority int, cid ci
 }
 
 func (provider *Provider) queueSendBlock(peerID peer.ID, priority int, cid cid.Cid, size int) {
-	log.Debugf("Sending HAVE for %s to %s", cid, peerID)
+	log := log.With("client", peerID)
+	log.Debugf("Sending HAVE for %s", cid)
 	provider.responseQueue.PushTasks(peerID, peertask.Task{
 		Topic:    cid,
 		Priority: priority,
