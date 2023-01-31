@@ -247,6 +247,18 @@ var (
 		Measure:     QueryErrorOtherCount,
 		Aggregation: view.Count(),
 	}
+	requestQueueView = &view.View{
+		Measure:     RequestQueueSize,
+		Aggregation: view.Sum(),
+	}
+	retrievalQueueView = &view.View{
+		Measure:     RetrievalQueueSize,
+		Aggregation: view.Sum(),
+	}
+	responseQueueView = &view.View{
+		Measure:     ResponseQueueSize,
+		Aggregation: view.Sum(),
+	}
 )
 
 var DefaultViews = []*view.View{
@@ -286,4 +298,7 @@ var DefaultViews = []*view.View{
 	queryErrorDAGStoreView,
 	queryErrorDealNotFoundView,
 	queryErrorOtherView,
+	requestQueueView,
+	retrievalQueueView,
+	responseQueueView,
 }
