@@ -186,6 +186,7 @@ func (provider *Provider) handleRequests(ctx context.Context) {
 			}
 			continue
 		}
+		stats.Record(ctx, metrics.RequestQueueSize.M(-int64(len(tasks))))
 
 		log := log.With("client", peerID)
 		log.Debugf("Processing %d requests", len(tasks))
@@ -201,7 +202,6 @@ func (provider *Provider) handleRequests(ctx context.Context) {
 		}
 
 		provider.requestQueue.TasksDone(peerID, tasks...)
-		stats.Record(ctx, metrics.RequestQueueSize.M(-int64(len(tasks))))
 	}
 }
 
@@ -292,6 +292,7 @@ func (provider *Provider) handleResponses(ctx context.Context) {
 			}
 			continue
 		}
+		stats.Record(ctx, metrics.ResponseQueueSize.M(-int64(len(tasks))))
 
 		log := log.With("client", peerID)
 		log.Debugf("Responding to %d requests", len(tasks))
@@ -347,7 +348,6 @@ func (provider *Provider) handleResponses(ctx context.Context) {
 		}
 
 		provider.responseQueue.TasksDone(peerID, tasks...)
-		stats.Record(ctx, metrics.ResponseQueueSize.M(-int64(len(tasks))))
 		log.Debugf("Successfully sent message")
 	}
 }
@@ -363,6 +363,7 @@ func (provider *Provider) handleRetrievals(ctx context.Context) {
 			}
 			continue
 		}
+		stats.Record(ctx, metrics.RetrievalQueueSize.M(-int64(len(tasks))))
 
 		log := log.With("client", peerID)
 		log.Debugf("Retrieval of %d CIDs queued for %s", len(tasks), peerID)
@@ -422,7 +423,6 @@ func (provider *Provider) handleRetrievals(ctx context.Context) {
 
 				blockCancel()
 				provider.retrievalQueue.TasksDone(peerID, task)
-				stats.Record(ctx, metrics.RetrievalQueueSize.M(-int64(1)))
 			}(task)
 		}
 	}
