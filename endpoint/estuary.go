@@ -11,7 +11,7 @@ import (
 
 	"github.com/application-research/autoretrieve/minerpeergetter"
 	"github.com/filecoin-project/go-address"
-	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
+	"github.com/filecoin-project/lassie/pkg/types"
 	"github.com/ipfs/go-cid"
 )
 
@@ -39,7 +39,7 @@ func NewEstuaryEndpoint(url string, mpg *minerpeergetter.MinerPeerGetter) *Estua
 	}
 }
 
-func (ee *EstuaryEndpoint) FindCandidates(ctx context.Context, cid cid.Cid) ([]lassieretriever.RetrievalCandidate, error) {
+func (ee *EstuaryEndpoint) FindCandidates(ctx context.Context, cid cid.Cid) ([]types.RetrievalCandidate, error) {
 	// Create URL with CID
 	endpointURL, err := url.Parse(ee.url)
 	if err != nil {
@@ -63,13 +63,13 @@ func (ee *EstuaryEndpoint) FindCandidates(ctx context.Context, cid cid.Cid) ([]l
 		return nil, ErrEndpointBodyInvalid
 	}
 
-	converted := make([]lassieretriever.RetrievalCandidate, 0, len(unfiltered))
+	converted := make([]types.RetrievalCandidate, 0, len(unfiltered))
 	for _, original := range unfiltered {
 		minerPeer, err := ee.mpg.MinerPeer(ctx, original.Miner)
 		if err != nil {
 			return nil, fmt.Errorf("%w: failed to get miner peer: %v", ErrEndpointRequestFailed, err)
 		}
-		converted = append(converted, lassieretriever.RetrievalCandidate{
+		converted = append(converted, types.RetrievalCandidate{
 			MinerPeer: minerPeer,
 			RootCid:   original.RootCid,
 		})

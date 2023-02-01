@@ -7,16 +7,20 @@ import (
 
 	"github.com/application-research/autoretrieve/blocks"
 	"github.com/application-research/autoretrieve/metrics"
+	"github.com/dustin/go-humanize"
 	lassieretriever "github.com/filecoin-project/lassie/pkg/retriever"
+	"github.com/filecoin-project/lassie/pkg/types"
 	"github.com/ipfs/go-bitswap/message"
 	bitswap_message_pb "github.com/ipfs/go-bitswap/message/pb"
 	"github.com/ipfs/go-bitswap/network"
 	"github.com/ipfs/go-cid"
 	"github.com/ipfs/go-datastore"
-	ipld "github.com/ipfs/go-ipld-format"
+	"github.com/ipfs/go-graphsync/storeutil"
+	format "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-peertaskqueue"
 	"github.com/ipfs/go-peertaskqueue/peertask"
+	"github.com/ipld/go-ipld-prime"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/fullrt"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -53,6 +57,7 @@ type Provider struct {
 	config       ProviderConfig
 	network      network.BitSwapNetwork
 	blockManager *blocks.Manager
+	linkSystem   ipld.LinkSystem
 	retriever    *lassieretriever.Retriever
 	taskQueue    *peertaskqueue.PeerTaskQueue
 	workReady    chan struct{}
@@ -97,6 +102,7 @@ func NewProvider(
 		config:       config,
 		network:      network.NewFromIpfsHost(host, routing),
 		blockManager: blockManager,
+		linkSystem:   storeutil.LinkSystemForBlockstore(blockManager.Blockstore),
 		retriever:    retriever,
 		taskQueue:    peertaskqueue.New(),
 		workReady:    make(chan struct{}, config.MaxBitswapWorkers),
@@ -157,14 +163,14 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 
 			// If there was a problem (aside from block not found), log and move
 			// on
-			if err != nil && !ipld.IsNotFound(err) {
+			if err != nil && !format.IsNotFound(err) {
 				logger.Warnf("Failed to get block for bitswap entry: %s", entry.Cid)
 				continue
 			}
 
 			// As long as no not found error was hit, queue the block and move
 			// on...
-			if !ipld.IsNotFound(err) {
+			if !format.IsNotFound(err) {
 				stats.Record(ctx, metrics.BlockstoreCacheHitCount.M(1))
 				provider.queueBlock(ctx, sender, entry, size)
 				continue
@@ -188,53 +194,9 @@ func (provider *Provider) ReceiveMessage(ctx context.Context, sender peer.ID, in
 
 		switch entry.WantType {
 		case wantTypeHave:
-			// TODO: for WANT_HAVE, just check if there's a candidate, we
-			// probably don't have to actually do the retrieval yet
-			if err := provider.retriever.Request(entry.Cid); err != nil {
-				// If no candidates were found, there's nothing that can be done, so
-				// queue DONT_HAVE and move on
-				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
-
-				if !errors.Is(err, lassieretriever.ErrNoCandidates) {
-					logger.Warnf("Could not get candidates: %s", err.Error())
-				}
-
-				continue
-			}
-
-			provider.blockManager.AwaitBlock(ctx, entry.Cid, func(_ blocks.Block, err error) {
-				if err != nil {
-					logger.Debugf("Failed to load block: %s", err.Error())
-					provider.queueDontHave(ctx, sender, entry, "failed_block_load")
-				} else {
-					logger.Debugf("Successfully awaited block (want_have): %s", entry.Cid)
-					provider.queueHave(context.Background(), sender, entry)
-				}
-				provider.signalWork()
-			})
+			provider.retrieveForPeer(ctx, entry, sender, false)
 		case wantTypeBlock:
-			if err := provider.retriever.Request(entry.Cid); err != nil {
-				// If no candidates were found, there's nothing that can be done, so
-				// queue DONT_HAVE and move on
-				provider.queueDontHave(ctx, sender, entry, "failed_retriever_request")
-
-				if !errors.Is(err, lassieretriever.ErrNoCandidates) {
-					logger.Warnf("Could not get candidates: %s", err.Error())
-				}
-
-				continue
-			}
-
-			provider.blockManager.AwaitBlock(ctx, entry.Cid, func(block blocks.Block, err error) {
-				if err != nil {
-					logger.Debugf("Failed to load block: %s", err.Error())
-					provider.queueDontHave(ctx, sender, entry, "failed_block_load")
-				} else {
-					logger.Debugf("Successfully awaited block (want_block): %s", entry.Cid)
-					provider.queueBlock(context.Background(), sender, entry, block.Size)
-				}
-				provider.signalWork()
-			})
+			provider.retrieveForPeer(ctx, entry, sender, true)
 		}
 	}
 
@@ -354,4 +316,67 @@ func (provider *Provider) queueHave(ctx context.Context, sender peer.ID, entry m
 
 	// Record response metric
 	stats.Record(ctx, metrics.BitswapResponseCount.M(1))
+}
+
+func (provider *Provider) retrieveForPeer(ctx context.Context, entry message.Entry, sender peer.ID, sendBlock bool) {
+	retrievalId, err := types.NewRetrievalID()
+	if err != nil {
+		logger.Errorf("Failed to create retrieval ID: %s", err.Error())
+		return
+	}
+
+	logger.Debugf("Starting retrieval for %s (%s)", entry.Cid, retrievalId)
+
+	// Start a background blockstore fetch with a callback to send the block
+	// to the peer once it's available.
+	blockCtx, blockCancel := context.WithCancel(ctx)
+	if provider.blockManager.AwaitBlock(blockCtx, entry.Cid, func(block blocks.Block, err error) {
+		if err != nil {
+			logger.Debugf("Failed to load block: %s", err.Error())
+			provider.queueDontHave(ctx, sender, entry, "failed_block_load")
+		} else {
+			if sendBlock {
+				logger.Debugf("Successfully awaited block (want_block): %s", entry.Cid)
+				provider.queueBlock(context.Background(), sender, entry, block.Size)
+			} else {
+				logger.Debugf("Successfully awaited block (want_have): %s", entry.Cid)
+				provider.queueHave(context.Background(), sender, entry)
+			}
+		}
+		provider.signalWork()
+		blockCancel()
+	}) {
+		// If the block was already in the blockstore then we don't need to
+		// start a retrieval.
+		return
+	}
+
+	// Try to start a new retrieval (if it's already running then no
+	// need to error, just continue on to await block)
+	go func() {
+		result, err := provider.retriever.Retrieve(ctx, provider.linkSystem, retrievalId, entry.Cid)
+		if err != nil {
+			if errors.Is(err, lassieretriever.ErrRetrievalAlreadyRunning) {
+				logger.Debugf("Retrieval already running for %s, no new one will be started", entry.Cid)
+				return // Don't send dont_have or run blockCancel(), let it async load
+			} else if errors.Is(err, lassieretriever.ErrNoCandidates) {
+				// Just do a debug print if there were no candidates because this happens a lot
+				logger.Debugf("No candidates for %s (%s)", entry.Cid, retrievalId)
+				provider.queueDontHave(ctx, sender, entry, "no_candidates")
+			} else {
+				// Otherwise, there was a real failure, print with more importance
+				logger.Errorf("Retrieval for %s (%s) failed: %v", entry.Cid, retrievalId, err)
+				provider.queueDontHave(ctx, sender, entry, "retrieval_failed")
+			}
+		} else {
+			logger.Infof("Retrieval for %s (%s) completed (duration: %s, bytes: %s, blocks: %d)",
+				entry.Cid,
+				retrievalId,
+				result.Duration,
+				humanize.IBytes(result.Size),
+				result.Blocks,
+			)
+		}
+		blockCancel()
+	}()
 }
