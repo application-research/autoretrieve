@@ -397,9 +397,6 @@ func (provider *Provider) handleRetrievals(ctx context.Context) {
 }
 
 func (provider *Provider) handleRetrieval(ctx context.Context, cid cid.Cid, peerID peer.ID, task *peertask.Task) {
-	ctx, cancel := context.WithTimeout(ctx, time.Second*15)
-	defer cancel()
-
 	retrievalId, err := types.NewRetrievalID()
 	if err != nil {
 		log.Errorf("Failed to create retrieval ID: %s", err.Error())
