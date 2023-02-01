@@ -3,6 +3,7 @@ package bitswap
 import (
 	"context"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/application-research/autoretrieve/blocks"
@@ -211,6 +212,8 @@ func (provider *Provider) handleRequest(
 	entry message.Entry,
 ) error {
 	log := log.With("client", peerID)
+	ctx, cancel := context.WithTimeout(ctx, time.Second*15)
+	defer cancel()
 
 	// Skip blacklisted CIDs
 	if provider.config.CidBlacklist[entry.Cid] {
@@ -313,33 +316,9 @@ func (provider *Provider) handleResponses(ctx context.Context) {
 				continue
 			}
 
-			switch data.action {
-			case actionSendHave:
-				msg.AddHave(cid)
-				log.Debugf("Sending have for %s", cid)
-
-				// Response metric
-				taggedCtx, _ := tag.New(ctx, tag.Insert(metrics.BitswapTopic, "HAVE"))
-				stats.Record(taggedCtx, metrics.BitswapResponseCount.M(1))
-			case actionSendDontHave:
-				msg.AddDontHave(cid)
-				log.Debugf("Sending dont have for %s", cid)
-
-				// Response metric
-				taggedCtx, _ := tag.New(ctx, tag.Insert(metrics.BitswapTopic, "DONT_HAVE"), tag.Insert(metrics.BitswapDontHaveReason, data.reason))
-				stats.Record(taggedCtx, metrics.BitswapResponseCount.M(1))
-			case actionSendBlock:
-				block, err := provider.blockManager.Get(ctx, cid)
-				if err != nil {
-					log.Warnf("Attempted to send a block but it is not in the blockstore")
-					continue
-				}
-				msg.AddBlock(block)
-				log.Debugf("Sending block for %s", cid)
-
-				// Response metric
-				taggedCtx, _ := tag.New(ctx, tag.Insert(metrics.BitswapTopic, "BLOCK"))
-				stats.Record(taggedCtx, metrics.BitswapResponseCount.M(1))
+			if err := provider.handleResponse(ctx, cid, data, msg); err != nil {
+				log.Warnf("Could not handle response for %s: %v", cid, err)
+				continue
 			}
 		}
 
@@ -351,6 +330,41 @@ func (provider *Provider) handleResponses(ctx context.Context) {
 		provider.responseQueue.TasksDone(peerID, tasks...)
 		log.Debugf("Successfully sent message")
 	}
+}
+
+func (provider *Provider) handleResponse(ctx context.Context, cid cid.Cid, data ResponseData, msg message.BitSwapMessage) error {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*15)
+	defer cancel()
+
+	switch data.action {
+	case actionSendHave:
+		msg.AddHave(cid)
+		log.Debugf("Sending have for %s", cid)
+
+		// Response metric
+		taggedCtx, _ := tag.New(ctx, tag.Insert(metrics.BitswapTopic, "HAVE"))
+		stats.Record(taggedCtx, metrics.BitswapResponseCount.M(1))
+	case actionSendDontHave:
+		msg.AddDontHave(cid)
+		log.Debugf("Sending dont have for %s", cid)
+
+		// Response metric
+		taggedCtx, _ := tag.New(ctx, tag.Insert(metrics.BitswapTopic, "DONT_HAVE"), tag.Insert(metrics.BitswapDontHaveReason, data.reason))
+		stats.Record(taggedCtx, metrics.BitswapResponseCount.M(1))
+	case actionSendBlock:
+		block, err := provider.blockManager.Get(ctx, cid)
+		if err != nil {
+			return fmt.Errorf("attempted to send a block but it is not in the blockstore")
+		}
+		msg.AddBlock(block)
+		log.Debugf("Sending block for %s", cid)
+
+		// Response metric
+		taggedCtx, _ := tag.New(ctx, tag.Insert(metrics.BitswapTopic, "BLOCK"))
+		stats.Record(taggedCtx, metrics.BitswapResponseCount.M(1))
+	}
+
+	return nil
 }
 
 func (provider *Provider) handleRetrievals(ctx context.Context) {
@@ -377,57 +391,62 @@ func (provider *Provider) handleRetrievals(ctx context.Context) {
 				continue
 			}
 
-			go func(task *peertask.Task) {
-				retrievalId, err := types.NewRetrievalID()
-				if err != nil {
-					log.Errorf("Failed to create retrieval ID: %s", err.Error())
-				}
-
-				log.Debugf("Starting retrieval for %s (%s)", cid, retrievalId)
-
-				// Start a background blockstore fetch with a callback to send the block
-				// to the peer once it's available.
-				blockCtx, blockCancel := context.WithCancel(ctx)
-				if provider.blockManager.AwaitBlock(blockCtx, cid, func(block blocks.Block, err error) {
-					if err != nil {
-						log.Debugf("Async block load failed: %s", err)
-						provider.queueSendDontHave(peerID, task.Priority, cid, "failed_block_load")
-					} else {
-						log.Debugf("Async block load completed: %s", cid)
-						provider.queueSendBlock(peerID, task.Priority, cid, block.Size)
-					}
-					blockCancel()
-				}) {
-					// If the block was already in the blockstore then we don't need to
-					// start a retrieval.
-					return
-				}
-
-				// Try to start a new retrieval (if it's already running then no
-				// need to error, just continue on to await block)
-				result, err := provider.retriever.Retrieve(ctx, retrievalId, cid)
-				if err != nil {
-					if errors.Is(err, lassieretriever.ErrRetrievalAlreadyRunning) {
-						log.Debugf("Retrieval already running for %s, no new one will be started", cid)
-						return // Don't send dont_have or run blockCancel(), let it async load
-					} else if errors.Is(err, lassieretriever.ErrNoCandidates) {
-						// Just do a debug print if there were no candidates because this happens a lot
-						log.Debugf("No candidates for %s (%s)", cid, retrievalId)
-						provider.queueSendDontHave(peerID, task.Priority, cid, "no_candidates")
-					} else {
-						// Otherwise, there was a real failure, print with more importance
-						log.Errorf("Retrieval for %s (%s) failed: %v", cid, retrievalId, err)
-						provider.queueSendDontHave(peerID, task.Priority, cid, "retrieval_failed")
-					}
-				} else {
-					log.Infof("Retrieval for %s (%s) completed (duration: %s, bytes: %s, blocks: %d)", cid, retrievalId, result.Duration, humanize.IBytes(result.Size), result.Blocks)
-				}
-
-				blockCancel()
-				provider.retrievalQueue.TasksDone(peerID, task)
-			}(task)
+			go provider.handleRetrieval(ctx, cid, peerID, task)
 		}
 	}
+}
+
+func (provider *Provider) handleRetrieval(ctx context.Context, cid cid.Cid, peerID peer.ID, task *peertask.Task) {
+	ctx, cancel := context.WithTimeout(ctx, time.Second*15)
+	defer cancel()
+
+	retrievalId, err := types.NewRetrievalID()
+	if err != nil {
+		log.Errorf("Failed to create retrieval ID: %s", err.Error())
+	}
+
+	log.Debugf("Starting retrieval for %s (%s)", cid, retrievalId)
+
+	// Start a background blockstore fetch with a callback to send the block
+	// to the peer once it's available.
+	blockCtx, blockCancel := context.WithCancel(ctx)
+	if provider.blockManager.AwaitBlock(blockCtx, cid, func(block blocks.Block, err error) {
+		if err != nil {
+			log.Debugf("Async block load failed: %s", err)
+			provider.queueSendDontHave(peerID, task.Priority, cid, "failed_block_load")
+		} else {
+			log.Debugf("Async block load completed: %s", cid)
+			provider.queueSendBlock(peerID, task.Priority, cid, block.Size)
+		}
+		blockCancel()
+	}) {
+		// If the block was already in the blockstore then we don't need to
+		// start a retrieval.
+		return
+	}
+
+	// Try to start a new retrieval (if it's already running then no
+	// need to error, just continue on to await block)
+	result, err := provider.retriever.Retrieve(ctx, retrievalId, cid)
+	if err != nil {
+		if errors.Is(err, lassieretriever.ErrRetrievalAlreadyRunning) {
+			log.Debugf("Retrieval already running for %s, no new one will be started", cid)
+			return // Don't send dont_have or run blockCancel(), let it async load
+		} else if errors.Is(err, lassieretriever.ErrNoCandidates) {
+			// Just do a debug print if there were no candidates because this happens a lot
+			log.Debugf("No candidates for %s (%s)", cid, retrievalId)
+			provider.queueSendDontHave(peerID, task.Priority, cid, "no_candidates")
+		} else {
+			// Otherwise, there was a real failure, print with more importance
+			log.Errorf("Retrieval for %s (%s) failed: %v", cid, retrievalId, err)
+			provider.queueSendDontHave(peerID, task.Priority, cid, "retrieval_failed")
+		}
+	} else {
+		log.Infof("Retrieval for %s (%s) completed (duration: %s, bytes: %s, blocks: %d)", cid, retrievalId, result.Duration, humanize.IBytes(result.Size), result.Blocks)
+	}
+
+	blockCancel()
+	provider.retrievalQueue.TasksDone(peerID, task)
 }
 
 func (provider *Provider) ReceiveError(err error) {
