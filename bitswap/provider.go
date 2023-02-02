@@ -97,11 +97,11 @@ type ConnLogger struct {
 }
 
 func (ConnLogger) Connected(n network.Network, c network.Conn) {
-	log.Debugf("Connection from %s with ID %s", c.RemoteMultiaddr(), c.ID())
+	log.Debugf("Connection from %s with ID %s", c.RemoteMultiaddr(), c.RemotePeer())
 }
 
 func (ConnLogger) Disconnected(n network.Network, c network.Conn) {
-	log.Debugf("Disconnection from %s with ID %s", c.RemoteMultiaddr(), c.ID())
+	log.Debugf("Disconnection from %s with ID %s", c.RemoteMultiaddr(), c.RemotePeer())
 }
 
 func NewProvider(
