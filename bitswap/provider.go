@@ -16,13 +16,14 @@ import (
 	format "github.com/ipfs/go-ipld-format"
 	"github.com/ipfs/go-libipfs/bitswap/message"
 	bitswap_message_pb "github.com/ipfs/go-libipfs/bitswap/message/pb"
-	"github.com/ipfs/go-libipfs/bitswap/network"
+	bsnet "github.com/ipfs/go-libipfs/bitswap/network"
 	logging "github.com/ipfs/go-log/v2"
 	"github.com/ipfs/go-peertaskqueue"
 	"github.com/ipfs/go-peertaskqueue/peertask"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p-kad-dht/fullrt"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"go.opencensus.io/stats"
@@ -64,7 +65,7 @@ type ProviderConfig struct {
 
 type Provider struct {
 	config       ProviderConfig
-	network      network.BitSwapNetwork
+	network      bsnet.BitSwapNetwork
 	blockManager *blocks.Manager
 	retriever    *lassieretriever.Retriever
 
@@ -89,6 +90,18 @@ func (*overwriteTaskMerger) HasNewInfo(task peertask.Task, existing []*peertask.
 
 func (*overwriteTaskMerger) Merge(task peertask.Task, existing *peertask.Task) {
 	*existing = task
+}
+
+type ConnLogger struct {
+	network.NoopNotifiee
+}
+
+func (ConnLogger) Connected(n network.Network, c network.Conn) {
+	log.Debugf("Connection from %s with ID %s", c.RemoteMultiaddr(), c.ID())
+}
+
+func (ConnLogger) Disconnected(n network.Network, c network.Conn) {
+	log.Debugf("Disconnection from %s with ID %s", c.RemoteMultiaddr(), c.ID())
 }
 
 func NewProvider(
@@ -126,9 +139,11 @@ func NewProvider(
 		routing = dht
 	}
 
+	host.Network().Notify(&ConnLogger{})
+
 	provider := &Provider{
 		config:                   config,
-		network:                  network.NewFromIpfsHost(host, routing),
+		network:                  bsnet.NewFromIpfsHost(host, routing),
 		blockManager:             blockManager,
 		retriever:                retriever,
 		requestQueue:             peertaskqueue.New(peertaskqueue.TaskMerger(&overwriteTaskMerger{}), peertaskqueue.IgnoreFreezing(true)),
