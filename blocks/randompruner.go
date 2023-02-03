@@ -270,6 +270,10 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 		status.pinned = false
 
 		paddedCidStr := fmt.Sprintf("%-*s", cidPadLength, cid.String())
+		if len(paddedCidStr) > cidPadLength {
+			paddedCidStr = paddedCidStr[:cidPadLength]
+		}
+)
 		if _, err := writer.WriteString(paddedCidStr + "\n"); err != nil {
 			pruner.allCidsLk.Unlock()
 			return fmt.Errorf("failed to write cid to tmp file: %w", err)
