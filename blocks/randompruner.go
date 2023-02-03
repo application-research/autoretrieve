@@ -263,7 +263,6 @@ func (pruner *RandomPruner) prune(ctx context.Context, bytesToPrune uint64) erro
 
 	pruner.allCidsLk.Lock()
 	for cid, status := range pruner.allCids {
-
 		if status.pinned && time.Since(status.pinTime) < pruner.pinDuration {
 			continue
 		}
