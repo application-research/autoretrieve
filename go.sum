@@ -319,8 +319,8 @@ github.com/filecoin-project/go-statestore v0.2.0/go.mod h1:8sjBYbS35HwPzct7iT4lI
 github.com/filecoin-project/go-storedcounter v0.1.0 h1:Mui6wSUBC+cQGHbDUBcO7rfh5zQkWJM/CpAZa/uOuus=
 github.com/filecoin-project/index-provider v0.9.2 h1:mOVyoRgymFcDc0XFew1WgdJ0GdKe0yVz9s+lrRfLa68=
 github.com/filecoin-project/index-provider v0.9.2/go.mod h1:NlHxQcy2iMGfUoUGUzrRxntcpiC50QSnvp68u2VTT40=
-github.com/filecoin-project/lassie v0.2.1-0.20230131095612-5c7f66f1624e h1:CRgqzkNaOdG8FixkVIzppSTN2iNUZOlYzQHNvZBLVmo=
-github.com/filecoin-project/lassie v0.2.1-0.20230131095612-5c7f66f1624e/go.mod h1:RIRHrOnCNEShDik9wNvqbkr4zEn85Ucx7eYTsqtnXys=
+github.com/filecoin-project/lassie v0.2.1-0.20230203015847-2b8b452e446c h1:KgfORhCLntJNgy7S6XMnMObkpd5ePovZ94X06m64mz4=
+github.com/filecoin-project/lassie v0.2.1-0.20230203015847-2b8b452e446c/go.mod h1:1yrCqBOWDJ/oTqRbdyiOhSBX3HOM0eXIJ06+grxYqos=
 github.com/filecoin-project/lotus v1.18.0 h1:HxdShHMEZT703n9KlQTgPVoUF/ocidMC/d3TzwxzTP8=
 github.com/filecoin-project/lotus v1.18.0/go.mod h1:jJih5ApnJZssc/wWsLJm+IWnfy8YaCyaDbvs/wTIVDk=
 github.com/filecoin-project/pubsub v1.0.0 h1:ZTmT27U07e54qV1mMiQo4HDr0buo8I1LDHBYLXlsNXM=

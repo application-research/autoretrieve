@@ -354,7 +354,11 @@ func (provider *Provider) retrieveForPeer(ctx context.Context, entry message.Ent
 	// Try to start a new retrieval (if it's already running then no
 	// need to error, just continue on to await block)
 	go func() {
-		result, err := provider.retriever.Retrieve(ctx, provider.linkSystem, retrievalId, entry.Cid)
+		result, err := provider.retriever.Retrieve(ctx, types.RetrievalRequest{
+			LinkSystem:  provider.linkSystem,
+			RetrievalID: retrievalId,
+			Cid:         entry.Cid,
+		}, func(types.RetrievalEvent) {})
 		if err != nil {
 			if errors.Is(err, lassieretriever.ErrRetrievalAlreadyRunning) {
 				logger.Debugf("Retrieval already running for %s, no new one will be started", entry.Cid)

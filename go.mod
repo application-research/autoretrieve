@@ -7,7 +7,7 @@ require (
 	github.com/dustin/go-humanize v1.0.0
 	github.com/filecoin-project/go-address v1.1.0
 	github.com/filecoin-project/go-state-types v0.9.9
-	github.com/filecoin-project/lassie v0.2.1-0.20230131095612-5c7f66f1624e
+	github.com/filecoin-project/lassie v0.2.1-0.20230203015847-2b8b452e446c
 	github.com/filecoin-project/lotus v1.18.0
 	github.com/ipfs/go-bitswap v0.10.2
 	github.com/ipfs/go-block-format v0.0.3
