@@ -136,8 +136,8 @@ func (pruner *RandomPruner) DeleteBlock(ctx context.Context, cid cid.Cid) error 
 	pruner.size -= uint64(blockSize)
 	pruner.allCidsLk.Lock()
 	cs, ok := pruner.allCids[cid]
-	delete(pruner.allCids, cid)
 	if ok {
+		delete(pruner.allCids, cid)
 		cidStatusPool.Put(cs)
 	}
 	pruner.allCidsLk.Unlock()
