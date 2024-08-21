@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	_ "net/http/pprof"
@@ -295,21 +296,32 @@ func cmdRegisterEstuary(ctx *cli.Context) error {
 	}
 
 	// Get public IP address
-
-	publicIPRes, err := http.Get("http://ip-api.com/json")
-	if err != nil {
-		return fmt.Errorf("could not get public ip: %v", err)
-	}
-	defer publicIPRes.Body.Close()
-
 	var ipInfo struct {
 		Query string
 	}
 
-	if err := json.NewDecoder(publicIPRes.Body).Decode(&ipInfo); err != nil {
-		return fmt.Errorf("could not get public ip: %v", err)
+	publicIP, err := http.Get("https://ip2location.io/ip")
+	if err == nil {
+		defer publicIP.Body.Close()
+		bodyBytes, err := io.ReadAll(publicIP.Body)
+
+		if err == nil {
+			bodyStr := string(bodyBytes[:])
+			ipInfo.Query = bodyStr
+		}
 	}
 
+	if ipInfo.Query == "" {
+		publicIPRes, err := http.Get("http://ip-api.com/json")
+		if err != nil {
+			return fmt.Errorf("could not get public ip: %v", err)
+		}
+		defer publicIPRes.Body.Close()
+
+		if err := json.NewDecoder(publicIPRes.Body).Decode(&ipInfo); err != nil {
+			return fmt.Errorf("could not get public ip: %v", err)
+		}
+	}
 	fmt.Printf("Using IP: %s\n", ipInfo.Query)
 
 	// Get peer key
